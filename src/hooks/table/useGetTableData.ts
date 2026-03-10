@@ -4,7 +4,7 @@ import { useModulesData } from "./useModulesData";
 import { Modules } from "dhis2-semis-types";
 
 export function useTableData({ module }: { module: Modules }) {
-    const { getBasicData, getStageData } = useModulesData()
+    const { getBasicData, getStageData, getAdmissionData } = useModulesData()
     const [loading, setLoading] = useState<boolean>(false)
     const [tableData, setTableData] = useState<{ data: TableDataProps[], pagination: any }>({ data: [], pagination: {} })
 
@@ -19,9 +19,13 @@ export function useTableData({ module }: { module: Modules }) {
                 } : {})
         };
 
-        const { formattedBasicTableData, pagination } = await getBasicData(updatedProps)
-
         try {
+            if (module === Modules.Admission) {
+                const { formattedBasicTableData: admissionData, pagination: admissionPagination } = await getAdmissionData(updatedProps);
+                setTableData({ pagination: admissionPagination, data: [...admissionData] });
+            } else {
+            const { formattedBasicTableData, pagination } = await getBasicData(updatedProps)
+
             switch (module) {
                 case Modules.Enrollment: {
                     setTableData({ pagination: pagination, data: [...formattedBasicTableData] });
@@ -46,6 +50,7 @@ export function useTableData({ module }: { module: Modules }) {
                     console.error("Invalid module key provided");
                     break;
                 }
+            }
             }
         } catch (error) {
             console.error("Error fetching data:", error);

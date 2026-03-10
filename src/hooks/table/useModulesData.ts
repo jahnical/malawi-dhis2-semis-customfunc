@@ -11,7 +11,7 @@ import { useGetCompleteEvents } from "../events/useGetCompleteEvents";
 import { TeiQueryResults } from "../../types/api/WithRegistrationTypes";
 import { EventQueryResults } from "../../types/api/WithoutRegistrationTypes";
 import { FormatResponseRowsProps } from "../../types/common/FormatRowsDataProps";
-import { attendanceDataValuesFormater, formatRowsData } from "../../utils/table/rows/formatRowsData";
+import { attendanceDataValuesFormater, formatRowsData, formatAdmissionRowsData } from "../../utils/table/rows/formatRowsData";
 
 
 
@@ -162,9 +162,95 @@ export function useModulesData() {
         }
     }
 
+    /**
+     * TEI-first data fetching for the Admission module.
+     * Queries tracked entities directly (with optional attribute filters),
+     * then fetches their registration events for additional data (grade, etc.).
+     * This ensures TEIs without registration events still appear.
+     */
+    async function getAdmissionData(tableDataProps: GetTableDataProps) {
+        cancelAllOperations()
+        const { page, pageSize, order, program, orgUnit, baseProgramStage, attributeFilters, academicYear, academicYearDataElement } = tableDataProps;
+
+        // Step 1: Query TEIs directly with pagination and optional attribute filters
+        const teiSearchQuery = makeCancellablePromise(
+            engine.query({
+                results: {
+                    resource: "tracker/trackedEntities",
+                    params: {
+                        fields: "trackedEntity,createdAt,orgUnit,attributes[attribute,value],enrollments[enrollment,orgUnit,program,status],programOwners[orgUnit]",
+                        ouMode: orgUnit != null ? "SELECTED" : "ACCESSIBLE",
+                        page,
+                        pageSize,
+                        program: program as unknown as string,
+                        orgUnit: orgUnit,
+                        order: order || "createdAt:desc",
+                        totalPages: true,
+                        ...(attributeFilters?.length ? { filter: attributeFilters } : {})
+                    }
+                }
+            }).catch((error: any) => {
+                show({
+                    message: `${("Could not get tracked entities")}: ${error.message}`,
+                    type: { critical: true }
+                });
+                setTimeout(hide, 5000);
+            })
+        );
+
+        requestRef.current.push(teiSearchQuery);
+        const teiResponse = await teiSearchQuery;
+        const teis = teiResponse?.results?.instances ?? teiResponse?.results?.trackedEntities ?? [];
+
+        // Step 2: Get registration events for these TEIs
+        let registrationEvents: any[] = [];
+        if (teis.length > 0 && baseProgramStage) {
+            const eventsQuery = makeCancellablePromise(
+                engine.query({
+                    results: {
+                        resource: "tracker/events",
+                        params: {
+                            fields: "*",
+                            ouMode: orgUnit != null ? "SELECTED" : "ACCESSIBLE",
+                            program: program as unknown as string,
+                            programStage: baseProgramStage,
+                            orgUnit: orgUnit,
+                            paging: false,
+                        }
+                    }
+                }).catch((error: any) => {
+                    show({
+                        message: `${("Could not get events")}: ${error.message}`,
+                        type: { critical: true }
+                    });
+                    setTimeout(hide, 5000);
+                })
+            );
+
+            requestRef.current.push(eventsQuery);
+            const eventsResponse = await eventsQuery;
+            registrationEvents = eventsResponse?.results?.instances ?? eventsResponse?.results?.events ?? [];
+        }
+
+        // Step 3: Format data (TEI-first)
+        const teiInstances = teis as unknown as FormatResponseRowsProps['teiInstances'];
+        const registrationInstances = registrationEvents as unknown as FormatResponseRowsProps['registrationInstances'];
+
+        return {
+            formattedBasicTableData: formatAdmissionRowsData({ teiInstances, registrationInstances, academicYear, academicYearDataElement }),
+            pagination: {
+                page: teiResponse?.results?.page,
+                pageSize: teiResponse?.results?.pageSize,
+                totalPages: teiResponse?.results?.pageCount,
+                totalElements: teiResponse?.results?.total
+            }
+        };
+    }
+
     return {
         getRegistrationData,
         getBasicData,
-        getStageData
+        getStageData,
+        getAdmissionData
     }
 }

@@ -20,6 +20,9 @@ import { attributes, dataValues } from "./utils/table/rows/formatRowsData"
 import { useDeleteEnrollment } from "./hooks/enrollment/useDeleteEnrollment"
 import { useGetEnrollment } from "./hooks/enrollment/useGetEnrollment"
 import { useGetTotalEnrollments } from "./hooks/enrollment/useGetTotalEnrollments"
+import { useGetAdmission } from "./hooks/admission/useGetAdmission"
+import { useDeleteAdmission } from "./hooks/admission/useDeleteAdmission"
+import { useGetTotalAdmissions } from "./hooks/admission/useGetTotalAdmissions"
 import useShowAlerts from "./hooks/commons/useShowAlert"
 import useViewPortWidth from "./hooks/rwd/useViewPortWidth"
 import { formatStringToLowerCase, formatStringToTitleCase, capitalizeString } from "./utils/common/formatStringCase"
@@ -66,6 +69,9 @@ export {
     useDeleteEnrollment,
     useGetEnrollment,
     useGetTotalEnrollments,
+    useGetAdmission,
+    useDeleteAdmission,
+    useGetTotalAdmissions,
     useShowAlerts,
     useViewPortWidth,
     formatStringToLowerCase,

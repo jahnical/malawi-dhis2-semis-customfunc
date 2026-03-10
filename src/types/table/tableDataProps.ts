@@ -16,6 +16,9 @@ interface GetTableDataProps {
     occurredBefore?: string
     attendanceConfig?: attendanceConfig
     paging?: boolean
+    skipPaging?: boolean
+    academicYear?: string
+    academicYearDataElement?: string
 }
 
 interface GetAttendanceDataProps {

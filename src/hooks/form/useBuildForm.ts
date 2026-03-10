@@ -14,6 +14,10 @@ export function useBuildForm({ dataStoreData, programData, module, schoolCalenda
             const { registration, 'socio-economics': socioEconomics, "final-result": final_result } = dataStoreData
 
             switch (module) {
+                case Modules.Admission:
+                    setFormData([formatResponseAttributes(programData)])
+                    break;
+
                 case Modules.Enrollment:
                     const registrationProgramStage = programStages?.find((element) => element?.id === registration.programStage) as unknown as ProgramStageConfig
                     const socioEconomicProgramStage = programStages?.find((element) => element?.id === socioEconomics?.programStage) as unknown as ProgramStageConfig
