@@ -42,6 +42,7 @@ import { useCacheData } from "./hooks/useCacheData/useCacheData"
 import { useGetPatternCodeParams } from "./hooks/tei/useGetPatternCodeParams"
 import { useGetCompleteEvents } from "./hooks/events/useGetCompleteEvents"
 import { useGetCompleteTeis } from "./hooks/tei/useGetCompleteTei"
+import { applyAcademicYearPrefix } from "./utils/helpers/applyAcademicYearPrefix"
 
 
 
@@ -94,4 +95,5 @@ export {
     useGetPatternCodeParams,
     useGetCompleteEvents,
     useGetCompleteTeis,
+    applyAcademicYearPrefix,
 }
