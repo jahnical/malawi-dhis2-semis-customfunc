@@ -16,7 +16,8 @@ const madatoryFieldsValidator = (program: any, fileRowData: any, module: string,
 
     students.forEach((student: any) => {
         const mandatoryAttributeErrors = validateMandatoryAttributtes(student, madatoryFieldsAttributes, profile)
-        const mandatoryDataElementErrors = validateMandatoryDataElements(student, program, profile)
+        // Admission module only uses TEI attributes, not program stage data elements
+        const mandatoryDataElementErrors = module === "admission" ? [] : validateMandatoryDataElements(student, program, profile)
         const invalidDateFormatErrors = validateDateFields(student, program, profile)
 
         if (mandatoryAttributeErrors.length === 0 && mandatoryDataElementErrors.length === 0 && invalidDateFormatErrors.length === 0) {
