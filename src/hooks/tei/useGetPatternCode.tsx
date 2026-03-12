@@ -32,6 +32,7 @@ export const useGetPatternCode = () => {
             if (pattern?.length) {
                 const params = await getPatternCodeParams({ pattern, orgUnit, params: {}, onFail: () => setError(true) })
                 code = await engine.query(TEI_ATTRIBUTES, { variables: { id, params } }) as unknown as PatternCodeQueryResults
+                console.log("Generated code for variable", id, ":", code?.results?.value);
                 patterns.push({ [id]: code?.results?.value })
             }
         }

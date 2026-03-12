@@ -23,6 +23,7 @@ export function useModulesData() {
     const requestRef = useRef<any[]>([]);
     const { hide, show } = useShowAlerts()
     const { cancelAllOperations, makeCancellablePromise } = RequestBroker({ requestRef })
+    const engine = useDataEngine()
 
     async function getRegistrationData(tableDataProps: GetTableDataProps) {
         const { page, pageSize, order, program, orgUnit, baseProgramStage, attributeFilters, dataElementFilters, paging } = tableDataProps;
@@ -169,6 +170,7 @@ export function useModulesData() {
      * This ensures TEIs without registration events still appear.
      */
     async function getAdmissionData(tableDataProps: GetTableDataProps) {
+        console.log("Fetching admission data with TEI-first approach:", tableDataProps);
         cancelAllOperations()
         const { page, pageSize, order, program, orgUnit, baseProgramStage, attributeFilters, academicYear, academicYearDataElement } = tableDataProps;
 
