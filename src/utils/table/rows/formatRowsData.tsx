@@ -57,6 +57,19 @@ export function attributes(data: attributesProps[]): RowsDataProps {
     return localData;
 }
 
+function formatRegistrationEvents(events: any[] = []): RowsDataProps[] {
+    return events.map((event: any) => ({
+        id: event?.event,
+        event: event?.event,
+        trackedEntity: event?.trackedEntity,
+        active: event?.active,
+        enrollment: event?.enrollment,
+        orgUnitName: event?.orgUnitName,
+        orgUnitId: event?.orgUnit,
+        ...dataValues(event?.dataValues ?? []),
+    }));
+}
+
 /**
  * TEI-first row formatter for the Admission module.
  * Iterates over TEIs (not events), attaching registration event data when available.
@@ -143,6 +156,7 @@ export function formatAdmissionRowsData({ teiInstances, registrationInstances, a
             // Standard metadata
             registrationEvent: mostRecentEvent?.event,
             registrationEventOccurredAt: mostRecentEvent?.occurredAt,
+            registrationEvents: formatRegistrationEvents(teiEvents),
             enrollmentId: currentEnrollment?.enrollment,
             enrollableEnrollmentId,
             activeEnrollmentToComplete,
