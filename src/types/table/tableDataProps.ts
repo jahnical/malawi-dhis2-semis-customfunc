@@ -18,6 +18,7 @@ interface GetTableDataProps {
     paging?: boolean
     skipPaging?: boolean
     academicYear?: string
+    enrollmentStatusAcademicYear?: string
     academicYearDataElement?: string
 }
 

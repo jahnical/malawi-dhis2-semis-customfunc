@@ -44,6 +44,7 @@ interface FormatResponseRowsProps {
     }[]
     additionalInstances?: any[]
     academicYear?: string
+    enrollmentStatusAcademicYear?: string
     academicYearDataElement?: string
 }
 

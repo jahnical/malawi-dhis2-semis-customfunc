@@ -172,7 +172,7 @@ export function useModulesData() {
     async function getAdmissionData(tableDataProps: GetTableDataProps) {
         console.log("Fetching admission data with TEI-first approach:", tableDataProps);
         cancelAllOperations()
-        const { page, pageSize, order, program, orgUnit, baseProgramStage, attributeFilters, academicYear, academicYearDataElement } = tableDataProps;
+        const { page, pageSize, order, program, orgUnit, baseProgramStage, attributeFilters, academicYear, enrollmentStatusAcademicYear, academicYearDataElement } = tableDataProps;
 
         // Step 1: Query TEIs directly with pagination and optional attribute filters
         const teiSearchQuery = makeCancellablePromise(
@@ -239,7 +239,7 @@ export function useModulesData() {
         const registrationInstances = registrationEvents as unknown as FormatResponseRowsProps['registrationInstances'];
 
         return {
-            formattedBasicTableData: formatAdmissionRowsData({ teiInstances, registrationInstances, academicYear, academicYearDataElement }),
+            formattedBasicTableData: formatAdmissionRowsData({ teiInstances, registrationInstances, academicYear, enrollmentStatusAcademicYear, academicYearDataElement }),
             pagination: {
                 page: teiResponse?.results?.page,
                 pageSize: teiResponse?.results?.pageSize,

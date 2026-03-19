@@ -62,7 +62,7 @@ export function attributes(data: attributesProps[]): RowsDataProps {
  * Iterates over TEIs (not events), attaching registration event data when available.
  * This ensures TEIs without registration events still appear in the table.
  */
-export function formatAdmissionRowsData({ teiInstances, registrationInstances, academicYear, academicYearDataElement }: FormatResponseRowsProps): RowsDataProps[] {
+export function formatAdmissionRowsData({ teiInstances, registrationInstances, academicYear, enrollmentStatusAcademicYear, academicYearDataElement }: FormatResponseRowsProps): RowsDataProps[] {
     const allRows: RowsDataProps[] = [];
 
     for (const tei of teiInstances ?? []) {
@@ -71,24 +71,29 @@ export function formatAdmissionRowsData({ teiInstances, registrationInstances, a
             .filter((event: any) => event.trackedEntity === tei.trackedEntity)
             .sort((a: any, b: any) => new Date(b.occurredAt || 0).getTime() - new Date(a.occurredAt || 0).getTime());
         const mostRecentEvent = teiEvents[0];
+        const activeEnrollment = tei.enrollments?.find((e: any) => e.status === 'ACTIVE');
+        const eventForDisplayedValues = mostRecentEvent;
 
         // Determine enrollment status by checking for an ACTIVE enrollment
         // in the current/default academic year.
         // Registration events store the academic year as a data element value.
-        // We match events for the selected year, then check if their enrollment is ACTIVE.
+        // We match events for the status year, then check if their enrollment is ACTIVE.
         let isEnrolled = false;
-        if (academicYear && academicYearDataElement) {
+        const statusAcademicYear = enrollmentStatusAcademicYear ?? academicYear;
+        if (statusAcademicYear && academicYearDataElement) {
             const matchingEnrollmentIds = new Set(
                 teiEvents
                     .filter((event: any) =>
                         (event.dataValues ?? []).some((dv: any) =>
-                            dv.dataElement === academicYearDataElement && String(dv.value) === String(academicYear)
+                            dv.dataElement === academicYearDataElement && String(dv.value) === String(statusAcademicYear)
                         )
                     )
                     .map((event: any) => event.enrollment)
             );
             isEnrolled = (tei.enrollments ?? []).some(
-                (e: any) => matchingEnrollmentIds.has(e.enrollment) && e.status === 'ACTIVE'
+                (e: any) => {
+                    return matchingEnrollmentIds.has(e.enrollment) && e.status === 'ACTIVE';
+                }
             );
         } else {
             // Fallback: if no academic year filter, check if there's any ACTIVE enrollment
@@ -96,7 +101,6 @@ export function formatAdmissionRowsData({ teiInstances, registrationInstances, a
             const enrollmentCount = tei.enrollments?.length ?? 0;
             isEnrolled = enrollmentCount > 1 && (tei.enrollments ?? []).some((e: any) => e.status === 'ACTIVE');
         }
-        const activeEnrollment = tei.enrollments?.find((e: any) => e.status === 'ACTIVE');
         const currentEnrollment = activeEnrollment ?? tei.enrollments?.[0];
 
         // Determine enrollment update strategy for the Enroll action:
@@ -133,8 +137,9 @@ export function formatAdmissionRowsData({ teiInstances, registrationInstances, a
         allRows.push({
             // TEI attributes
             ...attributes(tei.attributes ?? []),
-            // Registration event data values (grade, section, etc.) if available
-            ...(mostRecentEvent ? dataValues(mostRecentEvent.dataValues ?? []) : {}),
+            // Registration event data values (grade/standard, section, etc.) from the
+            // latest enrollment event overall, regardless of ACTIVE/COMPLETED status.
+            ...(eventForDisplayedValues ? dataValues(eventForDisplayedValues.dataValues ?? []) : {}),
             // Standard metadata
             registrationEvent: mostRecentEvent?.event,
             registrationEventOccurredAt: mostRecentEvent?.occurredAt,
