@@ -70,6 +70,32 @@ function formatRegistrationEvents(events: any[] = []): RowsDataProps[] {
     }));
 }
 
+function extractAcademicYearTokens(value: unknown): string[] {
+    if (value === undefined || value === null) return [];
+    const matches = String(value).match(/\d{4}/g);
+    return matches ?? [];
+}
+
+function matchesAcademicYearValue(eventAcademicYearValue: unknown, statusAcademicYear: unknown): boolean {
+    if (eventAcademicYearValue === undefined || eventAcademicYearValue === null) return false;
+    if (statusAcademicYear === undefined || statusAcademicYear === null) return false;
+
+    const eventValue = String(eventAcademicYearValue).trim();
+    const statusValue = String(statusAcademicYear).trim();
+
+    if (!eventValue || !statusValue) return false;
+    if (eventValue === statusValue) return true;
+
+    const eventTokens = extractAcademicYearTokens(eventValue);
+    const statusTokens = extractAcademicYearTokens(statusValue);
+
+    if (!eventTokens.length || !statusTokens.length) {
+        return false;
+    }
+
+    return eventTokens.some((token) => statusTokens.includes(token));
+}
+
 /**
  * TEI-first row formatter for the Admission module.
  * Iterates over TEIs (not events), attaching registration event data when available.
@@ -93,13 +119,17 @@ export function formatAdmissionRowsData({ teiInstances, registrationInstances, a
         // We match events for the status year, then check if their enrollment is ACTIVE.
         let isEnrolled = false;
         const statusAcademicYear = enrollmentStatusAcademicYear ?? academicYear;
-        if (statusAcademicYear && academicYearDataElement) {
+        if (statusAcademicYear) {
             const matchingEnrollmentIds = new Set(
                 teiEvents
                     .filter((event: any) =>
-                        (event.dataValues ?? []).some((dv: any) =>
-                            dv.dataElement === academicYearDataElement && String(dv.value) === String(statusAcademicYear)
-                        )
+                        (event.dataValues ?? []).some((dv: any) => {
+                            const matchesConfiguredAcademicYearElement = academicYearDataElement
+                                ? dv.dataElement === academicYearDataElement
+                                : true;
+
+                            return matchesConfiguredAcademicYearElement && matchesAcademicYearValue(dv.value, statusAcademicYear);
+                        })
                     )
                     .map((event: any) => event.enrollment)
             );
