@@ -54,7 +54,9 @@ export const CustomDhis2RulesEngine = (props: RulesEngineProps) => {
                 return applyRulesToVariable(copy, values);
             })
         }));
-        setUpdatedVariables(updated);
+        if (!isEqual(updatedVariables, updated)) {
+            setUpdatedVariables(updated);
+        }
     }
 
     function rulesEngineSections(variables: any[], values: Record<string, any>) {
@@ -65,7 +67,9 @@ export const CustomDhis2RulesEngine = (props: RulesEngineProps) => {
                 return applyRulesToVariable(copy, values);
             })
         }));
-        setUpdatedVariables(updated);
+        if (!isEqual(updatedVariables, updated)) {
+            setUpdatedVariables(updated);
+        }
     }
 
     function rulesEngineDataElements(variables: any[], values: Record<string, any>) {
@@ -73,7 +77,9 @@ export const CustomDhis2RulesEngine = (props: RulesEngineProps) => {
             const copy = { ...variable };
             return applyRulesToVariable(copy, values);
         });
-        setUpdatedVariables(updated);
+        if (!isEqual(updatedVariables, updated)) {
+            setUpdatedVariables(updated);
+        }
     }
 
 
