@@ -13,6 +13,59 @@ import { EventQueryResults } from "../../types/api/WithoutRegistrationTypes";
 import { FormatResponseRowsProps } from "../../types/common/FormatRowsDataProps";
 import { attendanceDataValuesFormater, formatRowsData, formatAdmissionRowsData } from "../../utils/table/rows/formatRowsData";
 
+function getTeiAttributeValue(tei: any, attributeId: string) {
+    return (tei?.attributes ?? []).find((attribute: any) => attribute.attribute === attributeId)?.value;
+}
+
+function matchesFilterExpression(value: unknown, expression: string) {
+    const [fieldId, operator, firstValue, ...rest] = expression.split(":");
+    if (!fieldId || !operator) return true;
+    if (value === undefined || value === null) return false;
+
+    const valueString = String(value);
+    const normalizedValue = valueString.toLowerCase();
+
+    switch (operator) {
+        case "eq":
+            return normalizedValue === String(firstValue ?? "").toLowerCase();
+        case "in":
+            return String([firstValue, ...rest].join(":") ?? "")
+                .split(";")
+                .map((option) => option.toLowerCase())
+                .includes(normalizedValue);
+        case "like":
+            return normalizedValue.includes(String([firstValue, ...rest].join(":") ?? "").toLowerCase());
+        case "ge": {
+            const leIndex = rest.findIndex((token) => token === "le");
+            const endValue = leIndex > -1 ? rest[leIndex + 1] : undefined;
+
+            if (firstValue && valueString < firstValue) return false;
+            if (endValue && valueString > endValue) return false;
+            return true;
+        }
+        default:
+            return true;
+    }
+}
+
+function matchesTeiAttributeFilters(tei: any, filters: any[]) {
+    return filters.every((filter: any) => {
+        const expression = Array.isArray(filter) ? filter[0] : filter;
+        if (typeof expression !== "string") return true;
+
+        const [attributeId] = expression.split(":");
+        return matchesFilterExpression(getTeiAttributeValue(tei, attributeId), expression);
+    });
+}
+
+function normalizeFilterExpressions(filters: any[] = []) {
+    return filters.reduce((acc: string[], filter: any) => {
+        const expression = Array.isArray(filter) ? filter[0] : filter;
+        if (typeof expression === "string") acc.push(expression);
+        return acc;
+    }, []);
+}
+
 
 
 export function useModulesData() {
@@ -82,6 +135,19 @@ export function useModulesData() {
         requestRef.current.push(eventsResults);
         const eventsResultsResponse = await eventsResults
         const data = eventsResultsResponse?.results?.instances ? eventsResultsResponse?.results?.instances : eventsResultsResponse?.results?.events
+        if (!data || data.length === 0) {
+            return {
+                registrationInstances: [],
+                teiInstances: [],
+                formattedBasicTableData: [],
+                pagination: {
+                    page: eventsResultsResponse?.results?.pager?.page ?? eventsResultsResponse?.results?.page ?? page,
+                    pageSize: eventsResultsResponse?.results?.pager?.pageSize ?? eventsResultsResponse?.results?.pageSize ?? pageSize,
+                    totalPages: eventsResultsResponse?.results?.pager?.pageCount ?? eventsResultsResponse?.results?.pageCount ?? 0,
+                    totalElements: eventsResultsResponse?.results?.pager?.total ?? eventsResultsResponse?.results?.total ?? 0,
+                }
+            }
+        }
 
         const registrationTrackedEntities = data.map((x: { trackedEntity: string }) => x.trackedEntity).toString()
 
@@ -172,25 +238,27 @@ export function useModulesData() {
     async function getAdmissionData(tableDataProps: GetTableDataProps) {
         console.log("Fetching admission data with TEI-first approach:", tableDataProps);
         cancelAllOperations()
-        const { page, pageSize, order, program, orgUnit, baseProgramStage, attributeFilters, academicYear, enrollmentStatusAcademicYear, academicYearDataElement } = tableDataProps;
+        const { page, pageSize, order, program, orgUnit, baseProgramStage, attributeFilters, academicYear, enrollmentStatusAcademicYear, academicYearDataElement, filterAdmissionByEventAcademicYear, transferConfig } = tableDataProps;
 
-        // Step 1: Query TEIs directly with pagination and optional attribute filters
-        const teiSearchQuery = makeCancellablePromise(
-            engine.query({
-                results: {
-                    resource: "tracker/trackedEntities",
-                    params: {
-                        fields: "trackedEntity,createdAt,orgUnit,attributes[attribute,value],enrollments[enrollment,orgUnit,program,status],programOwners[orgUnit]",
-                        ouMode: orgUnit != null ? "SELECTED" : "ACCESSIBLE",
-                        page,
-                        pageSize,
-                        program: program as unknown as string,
-                        orgUnit: orgUnit,
-                        order: order || "createdAt:desc",
-                        totalPages: true,
-                        ...(attributeFilters?.length ? { filter: attributeFilters } : {})
-                    }
-                }
+        // Query TEIs.
+        // (Currently owned by OU) OR (Registration event in OU).
+        // First, get TEIs owned by OU.
+        // Apply academic year filter here
+        const teiAttributeFilters = normalizeFilterExpressions(attributeFilters || []);
+        if (academicYear && academicYearDataElement) {
+
+        }
+
+        const teiOwnedSearchQuery = makeCancellablePromise(
+            getCompleteTeis({
+                orgUnitMode: "DESCENDANTS",
+                page,
+                pageSize,
+                program: program as unknown as string,
+                orgUnit: orgUnit,
+                order: order || "createdAt:desc",
+                totalPages: true,
+                ...(teiAttributeFilters.length ? { filter: teiAttributeFilters } : {})
             }).catch((error: any) => {
                 show({
                     message: `${("Could not get tracked entities")}: ${error.message}`,
@@ -200,51 +268,115 @@ export function useModulesData() {
             })
         );
 
-        requestRef.current.push(teiSearchQuery);
-        const teiResponse = await teiSearchQuery;
-        const teis = teiResponse?.results?.instances ?? teiResponse?.results?.trackedEntities ?? [];
+        requestRef.current.push(teiOwnedSearchQuery);
+        const teiOwnedResponse = await teiOwnedSearchQuery;
+        let ownedTeis = teiOwnedResponse?.results?.instances ?? teiOwnedResponse?.results?.trackedEntities ?? [];
 
-        // Step 2: Get registration events for these TEIs
-        let registrationEvents: any[] = [];
-        if (teis.length > 0 && baseProgramStage) {
-            const eventsQuery = makeCancellablePromise(
-                engine.query({
-                    results: {
-                        resource: "tracker/events",
-                        params: {
-                            fields: "*",
-                            ouMode: orgUnit != null ? "SELECTED" : "ACCESSIBLE",
-                            program: program as unknown as string,
-                            programStage: baseProgramStage,
-                            orgUnit: orgUnit,
-                            paging: false,
-                        }
-                    }
-                }).catch((error: any) => {
-                    show({
-                        message: `${("Could not get events")}: ${error.message}`,
-                        type: { critical: true }
-                    });
-                    setTimeout(hide, 5000);
-                })
+        // Supplemental query for "Transfer OUT" students.
+        // We look for registration events originally in this OU for students now owned elsewhere.
+        // This is only necessary if we are on the first page or if we want to ensure visibility.
+        // For simplicity and to avoid missing students, we fetch them if baseProgramStage is available.
+        let transferOutTeiIds: string[] = [];
+        if (orgUnit && baseProgramStage) {
+            const transferOutEventsQuery = makeCancellablePromise(
+                getCompleteEvents({
+                    orgUnit: orgUnit,
+                    orgUnitMode: "SELECTED",
+                    program: program as unknown as string,
+                    programStage: baseProgramStage,
+                    paging: false,
+                }).catch(() => null)
             );
-
-            requestRef.current.push(eventsQuery);
-            const eventsResponse = await eventsQuery;
-            registrationEvents = eventsResponse?.results?.instances ?? eventsResponse?.results?.events ?? [];
+            requestRef.current.push(transferOutEventsQuery);
+            const transferOutResponse = await transferOutEventsQuery;
+            const events = transferOutResponse?.results?.instances ?? transferOutResponse?.results?.events ?? [];
+            transferOutTeiIds = events.map((e: any) => e.trackedEntity).filter(Boolean);
         }
 
-        // Step 3: Format data (TEI-first)
+        // Combine IDs, ensuring we don't duplicate
+        const ownedTeiIds = ownedTeis.map((t: any) => t.trackedEntity);
+        const allRelevantTeiIds = Array.from(new Set([...ownedTeiIds, ...transferOutTeiIds]));
+
+        // If we found extra IDs (transferred out), we need to fetch their TEI objects
+        // if they weren't in the primary "owned" search results.
+        const missingTeiIds = allRelevantTeiIds.filter(id => !ownedTeiIds.includes(id));
+        let additionalTeis: any[] = [];
+        if (missingTeiIds.length > 0) {
+            const missingTeisQuery = makeCancellablePromise(
+                getCompleteTeis({
+                    ouMode: "ACCESSIBLE",
+                    program: program as unknown as string,
+                    trackedEntities: missingTeiIds.join(";"),
+                    paging: false,
+                }).catch(() => null)
+            );
+            requestRef.current.push(missingTeisQuery);
+            const missingTeisResponse = await missingTeisQuery;
+            additionalTeis = missingTeisResponse?.results?.instances ?? missingTeisResponse?.results?.trackedEntities ?? [];
+        }
+
+        let teis = [...ownedTeis, ...additionalTeis];
+
+        if (teiAttributeFilters.length) {
+            teis = teis.filter((tei: any) => matchesTeiAttributeFilters(tei, teiAttributeFilters));
+        }
+
+        // Get registration and transfer events for these TEIs across ALL OUs
+        // so we can see where they went (Transfer OUT) or where they came from (Transfer IN).
+        let registrationEvents: any[] = [];
+        if (teis.length > 0 && baseProgramStage) {
+            const stagesToQuery = [baseProgramStage, transferConfig?.transferProgramStage].filter(Boolean);
+            const batchSize = 10;
+            const teiBatches = [];
+            for (let i = 0; i < teis.length; i += batchSize) {
+                teiBatches.push(teis.slice(i, i + batchSize));
+            }
+
+            const eventsQueries: any[] = [];
+            for (const stage of stagesToQuery) {
+                const queries = teiBatches.map(batch =>
+                    getCompleteEvents({
+                        ouMode: "ACCESSIBLE",
+                        program: program as unknown as string,
+                        programStage: stage,
+                        trackedEntity: batch.map((x: any) => x.trackedEntity).join(";"),
+                        paging: false,
+                    }).catch(error => {
+                        console.error(`Error fetching events for stage ${stage} batch`, batch, error);
+                        return null;
+                    })
+                );
+                eventsQueries.push(...queries);
+            }
+
+            try {
+                const eventsResponses = await Promise.all(eventsQueries);
+                for (const response of eventsResponses) {
+                    if (!response) continue;
+                    const events = response?.results?.instances ?? response?.results?.events ?? [];
+                    registrationEvents = [...registrationEvents, ...events];
+                }
+            } catch (error: any) {
+                show({
+                    message: `${("Could not get events")}: ${error.message}`,
+                    type: { critical: true }
+                });
+                setTimeout(hide, 5000);
+            }
+        }
+
+        // Format data (TEI-first)
         const teiInstances = teis as unknown as FormatResponseRowsProps['teiInstances'];
         const registrationInstances = registrationEvents as unknown as FormatResponseRowsProps['registrationInstances'];
+        const formattedBasicTableData = formatAdmissionRowsData({ teiInstances, registrationInstances, academicYear, enrollmentStatusAcademicYear, academicYearDataElement, filterAdmissionByEventAcademicYear, orgUnit, transferConfig });
 
         return {
-            formattedBasicTableData: formatAdmissionRowsData({ teiInstances, registrationInstances, academicYear, enrollmentStatusAcademicYear, academicYearDataElement }),
+            formattedBasicTableData,
             pagination: {
-                page: teiResponse?.results?.page,
-                pageSize: teiResponse?.results?.pageSize,
-                totalPages: teiResponse?.results?.pageCount,
-                totalElements: teiResponse?.results?.total
+                page: teiOwnedResponse?.results?.page ?? teiOwnedResponse?.results?.pager?.page,
+                pageSize: teiOwnedResponse?.results?.pageSize ?? teiOwnedResponse?.results?.pager?.pageSize,
+                totalPages: teiOwnedResponse?.results?.pageCount ?? teiOwnedResponse?.results?.pager?.pageCount,
+                totalElements: teiOwnedResponse?.results?.total ?? teiOwnedResponse?.results?.pager?.total ?? formattedBasicTableData.length
             }
         };
     }

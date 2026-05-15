@@ -46,6 +46,12 @@ interface FormatResponseRowsProps {
     academicYear?: string
     enrollmentStatusAcademicYear?: string
     academicYearDataElement?: string
+    filterAdmissionByEventAcademicYear?: boolean
+    orgUnit?: string
+    transferConfig?: {
+        transferProgramStage: string
+        destinySchoolDataElement: string
+    }
 }
 
 type RowsDataProps = Record<string, string | number | boolean | any>;

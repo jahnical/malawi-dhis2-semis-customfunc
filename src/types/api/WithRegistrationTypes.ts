@@ -3,12 +3,13 @@ interface TeiQueryProps {
     pageSize?: number
     page?: number
     orgUnitMode?: string
-    trackedEntities: string[]
+    ouMode?: string
+    trackedEntities?: string[] | string
     orgUnit?: string
     order?: string
     paging?: boolean
-    filter?: string
-    totalPages?: boolean,
+    filter?: string | string[]
+    totalPages?: boolean
 }
 
 interface TeiSearchQueryProps {
