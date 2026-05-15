@@ -41,8 +41,8 @@ export function formatRowsData({ registrationInstances, teiInstances, isBasicSta
                     ? transferEvent.dataValues?.find((dv: any) => dv.dataElement === transferConfig.originSchoolDataElement)?.value
                     : null;
 
-                const destinySchool = typeof destinySchoolValue === 'object' ? destinySchoolValue?.id : destinySchoolValue;
-                const originSchool = typeof originSchoolValue === 'object' ? originSchoolValue?.id : originSchoolValue;
+                const destinySchool = (typeof destinySchoolValue === 'object' && destinySchoolValue !== null) ? (destinySchoolValue as any)?.id : destinySchoolValue;
+                const originSchool = (typeof originSchoolValue === 'object' && originSchoolValue !== null) ? (originSchoolValue as any)?.id : originSchoolValue;
 
                 const eventOrgUnitId = transferEvent.orgUnitId || (typeof transferEvent.orgUnit === 'object' ? (transferEvent.orgUnit?.id || transferEvent.orgUnit) : transferEvent.orgUnit);
 
@@ -185,8 +185,8 @@ export function formatAdmissionRowsData({ teiInstances, registrationInstances, a
                     ? transferEvent.dataValues?.find((dv: any) => dv.dataElement === transferConfig.originSchoolDataElement)?.value
                     : null;
                 
-                const destinySchool = typeof destinySchoolValue === 'object' ? destinySchoolValue?.id : destinySchoolValue;
-                const originSchool = typeof originSchoolValue === 'object' ? originSchoolValue?.id : originSchoolValue;
+                const destinySchool = (typeof destinySchoolValue === 'object' && destinySchoolValue !== null) ? (destinySchoolValue as any)?.id : destinySchoolValue;
+                const originSchool = (typeof originSchoolValue === 'object' && originSchoolValue !== null) ? (originSchoolValue as any)?.id : originSchoolValue;
 
                 const eventOrgUnitId = transferEvent.orgUnitId || (typeof transferEvent.orgUnit === 'object' ? (transferEvent.orgUnit?.id || transferEvent.orgUnit) : transferEvent.orgUnit);
 
