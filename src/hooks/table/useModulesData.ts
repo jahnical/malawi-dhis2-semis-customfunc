@@ -162,7 +162,7 @@ export function useModulesData() {
                 )
             );
             
-            transferEventsPromises.forEach(p => requestRef.current.push(p));
+            transferEventsPromises.forEach((p: any) => requestRef.current.push(p));
             const transferEventsResponses = await Promise.all(transferEventsPromises);
             const transferEvents = transferEventsResponses.flatMap(response => 
                 response?.results?.instances ?? response?.results?.events ?? []
@@ -178,7 +178,7 @@ export function useModulesData() {
                     orgUnitMode: "ACCESSIBLE",
                     paging: false,
                     program: program as unknown as string,
-                    trackedEntity: id,
+                    trackedEntity: id as string,
                 }).catch((error) => {
                     show({
                         message: `${("Could not get tracked entities")}: ${error.message}`,
@@ -190,7 +190,7 @@ export function useModulesData() {
             )
         );
 
-        teiResultsPromises.forEach(p => requestRef.current.push(p));
+        teiResultsPromises.forEach((p: any) => requestRef.current.push(p));
         const teiResultsResponses = await Promise.all(teiResultsPromises);
         const teis = teiResultsResponses.flatMap(response => 
             response?.results?.instances ?? response?.results?.trackedEntities ?? []

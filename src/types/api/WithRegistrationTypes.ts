@@ -5,6 +5,7 @@ interface TeiQueryProps {
     orgUnitMode?: string
     ouMode?: string
     trackedEntities?: string[] | string
+    trackedEntity?: string
     orgUnit?: string
     order?: string
     paging?: boolean
