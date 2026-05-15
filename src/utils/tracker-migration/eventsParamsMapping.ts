@@ -9,7 +9,12 @@ type MapRule = {
 export const rules: Record<string, MapRule> = {
   trackedEntities: {
     to: "trackedEntity",
-    transform: (v: string) => v.replaceAll(",", ";"),
+    transform: (v: string | string[]) => Array.isArray(v) ? v : v.split(";"),
+  },
+
+  trackedEntity: {
+    to: "trackedEntity",
+    transform: (v: string | string[]) => Array.isArray(v) ? v : v.split(";"),
   },
 
   // events: {

@@ -107,7 +107,7 @@ export function useModulesData() {
 
     async function getBasicData(tableDataProps: GetTableDataProps) {
         cancelAllOperations()
-        const { page, pageSize, order, program, orgUnit, baseProgramStage, attributeFilters, dataElementFilters, paging } = tableDataProps;
+        const { page, pageSize, order, program, orgUnit, baseProgramStage, attributeFilters, dataElementFilters, paging, transferConfig } = tableDataProps;
 
         const eventsResults = makeCancellablePromise(
             getCompleteEvents({
@@ -134,7 +134,7 @@ export function useModulesData() {
 
         requestRef.current.push(eventsResults);
         const eventsResultsResponse = await eventsResults
-        const data = eventsResultsResponse?.results?.instances ? eventsResultsResponse?.results?.instances : eventsResultsResponse?.results?.events
+        let data = eventsResultsResponse?.results?.instances ? eventsResultsResponse?.results?.instances : eventsResultsResponse?.results?.events
         if (!data || data.length === 0) {
             return {
                 registrationInstances: [],
@@ -149,27 +149,52 @@ export function useModulesData() {
             }
         }
 
-        const registrationTrackedEntities = data.map((x: { trackedEntity: string }) => x.trackedEntity).toString()
+        if (transferConfig) {
+            const transferEventsPromises = data.map((x: { trackedEntity: string }) => 
+                makeCancellablePromise(
+                    getCompleteEvents({
+                        orgUnitMode: "ACCESSIBLE",
+                        program: program as unknown as string,
+                        programStage: transferConfig.transferProgramStage,
+                        trackedEntity: x.trackedEntity,
+                        paging: false,
+                    }).catch(() => null)
+                )
+            );
+            
+            transferEventsPromises.forEach(p => requestRef.current.push(p));
+            const transferEventsResponses = await Promise.all(transferEventsPromises);
+            const transferEvents = transferEventsResponses.flatMap(response => 
+                response?.results?.instances ?? response?.results?.events ?? []
+            );
+            data = [...data, ...transferEvents];
+        }
 
-        const teiResults = registrationTrackedEntities?.length > 0
-            && makeCancellablePromise(
+        const registrationTrackedEntities = Array.from(new Set(data.map((x: { trackedEntity: string }) => x.trackedEntity)));
+
+        const teiResultsPromises = registrationTrackedEntities.map(id => 
+            makeCancellablePromise(
                 getCompleteTeis({
                     orgUnitMode: "ACCESSIBLE",
                     paging: false,
                     program: program as unknown as string,
-                    trackedEntities: registrationTrackedEntities,
+                    trackedEntity: id,
                 }).catch((error) => {
                     show({
-                        message: `${("Could not get traked entities")}: ${error.message}`,
+                        message: `${("Could not get tracked entities")}: ${error.message}`,
                         type: { critical: true }
                     });
                     setTimeout(hide, 5000);
+                    return null;
                 })
             )
+        );
 
-        requestRef.current.push(teiResults);
-        const teiResultsResponse = registrationTrackedEntities?.length > 0 ? await teiResults : { results: { instances: [], trackedEntities: [] } } as unknown as TeiQueryResults
-        const teis = teiResultsResponse?.results?.instances ? teiResultsResponse?.results?.instances : teiResultsResponse?.results?.trackedEntities
+        teiResultsPromises.forEach(p => requestRef.current.push(p));
+        const teiResultsResponses = await Promise.all(teiResultsPromises);
+        const teis = teiResultsResponses.flatMap(response => 
+            response?.results?.instances ?? response?.results?.trackedEntities ?? []
+        );
 
         const registrationInstances = data as unknown as FormatResponseRowsProps['registrationInstances'];
         const teiInstances = teis as unknown as FormatResponseRowsProps['teiInstances'];
@@ -177,7 +202,7 @@ export function useModulesData() {
         return {
             registrationInstances,
             teiInstances,
-            formattedBasicTableData: formatRowsData({ registrationInstances, teiInstances, isBasicStage: true }),
+            formattedBasicTableData: formatRowsData({ registrationInstances, teiInstances, isBasicStage: true, transferConfig, orgUnit }),
             pagination: {
                 page: eventsResultsResponse?.results?.pager?.page ?? eventsResultsResponse?.results?.page,
                 pageSize: eventsResultsResponse?.results?.pager?.pageSize ?? eventsResultsResponse?.results?.pageSize,
@@ -199,7 +224,7 @@ export function useModulesData() {
                     order: order || "occurredAt:desc",
                     programStage: baseProgramStage!,
                     orgUnit: orgUnit,
-                    trackedEntities: formattedBasicTableData[i].trackedEntity,
+                    trackedEntity: formattedBasicTableData[i].trackedEntity,
                     ...(occurredAfter ? { occurredAfter: occurredAfter } : {}),
                     ...(occurredBefore ? { occurredBefore: occurredBefore } : {})
                 }).catch((error) => {

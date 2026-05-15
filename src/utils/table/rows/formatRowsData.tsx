@@ -3,10 +3,17 @@ import { dataValuesProps } from "../../../types/api/WithoutRegistrationTypes";
 import { attendanceConfig, AttendanceFormaterProps } from "src/types/table/FormatRowsDataTypes";
 import { FormatResponseRowsProps, RowsDataProps } from "../../../types/common/FormatRowsDataProps";
 
-export function formatRowsData({ registrationInstances, teiInstances, isBasicStage = false }: FormatResponseRowsProps): RowsDataProps[] {
+export function formatRowsData({ registrationInstances, teiInstances, isBasicStage = false, transferConfig, orgUnit }: FormatResponseRowsProps): RowsDataProps[] {
     const allRows: RowsDataProps[] = [];
 
-    for (const event of registrationInstances ?? []) {
+    // Separate registration events from other events (like transfer events)
+    // In basic stage, we usually display one row per enrollment/registration event
+    const mainEvents = registrationInstances?.filter(e => !transferConfig || (e.programStage || e.programStageId) !== transferConfig.transferProgramStage) ?? [];
+    
+    // If no main events (e.g. only transfer events fetched), we might need to use all registrationInstances
+    const eventsToMap = mainEvents.length > 0 ? mainEvents : (registrationInstances ?? []);
+
+    for (const event of eventsToMap) {
         const teiDetails = teiInstances?.find(tei => tei.trackedEntity === event.trackedEntity);
 
         // Find the enrollment that matches the current academic year event's 
@@ -14,6 +21,42 @@ export function formatRowsData({ registrationInstances, teiInstances, isBasicSta
 
         // Check if the TEI has any active enrollment
         const hasActiveEnrollment = teiDetails?.enrollments?.some(enrollment => enrollment.status === 'ACTIVE') ?? false;
+
+        // Determine transfer status
+        let transferCategory = "_";
+        if (transferConfig) {
+            // Look through ALL instances for this TEI to find the transfer event
+            const teiEvents = (registrationInstances ?? [])
+                .filter((e: any) => e.trackedEntity === event.trackedEntity);
+
+            const transferEvent = teiEvents.find((e: any) => {
+                const psId = e.programStage || e.programStageId;
+                const configPsId = transferConfig.transferProgramStage;
+                return psId === configPsId || (typeof psId === 'object' && (psId?.id === configPsId || psId === configPsId));
+            });
+
+            if (transferEvent) {
+                const destinySchoolValue = transferEvent.dataValues?.find((dv: any) => dv.dataElement === transferConfig.destinySchoolDataElement)?.value;
+                const originSchoolValue = transferConfig.originSchoolDataElement
+                    ? transferEvent.dataValues?.find((dv: any) => dv.dataElement === transferConfig.originSchoolDataElement)?.value
+                    : null;
+
+                const destinySchool = typeof destinySchoolValue === 'object' ? destinySchoolValue?.id : destinySchoolValue;
+                const originSchool = typeof originSchoolValue === 'object' ? originSchoolValue?.id : originSchoolValue;
+
+                const eventOrgUnitId = transferEvent.orgUnitId || (typeof transferEvent.orgUnit === 'object' ? (transferEvent.orgUnit?.id || transferEvent.orgUnit) : transferEvent.orgUnit);
+
+                if (destinySchool === orgUnit || (typeof destinySchool === 'object' && destinySchool?.id === orgUnit)) {
+                    transferCategory = "Transfer IN";
+                } else if ((eventOrgUnitId === orgUnit || originSchool === orgUnit || (typeof originSchool === 'object' && originSchool?.id === orgUnit)) && destinySchool && destinySchool !== orgUnit) {
+                    transferCategory = "Transfer OUT";
+                } else if ((originSchool === orgUnit || (typeof originSchool === 'object' && originSchool?.id === orgUnit)) && !destinySchool) {
+                    transferCategory = "Transfer OUT";
+                } else if (eventOrgUnitId === orgUnit && destinySchool && destinySchool !== orgUnit) {
+                    transferCategory = "Transfer OUT";
+                }
+            }
+        }
 
         allRows.push({
             ...dataValues(event.dataValues),
@@ -31,6 +74,7 @@ export function formatRowsData({ registrationInstances, teiInstances, isBasicSta
                     programId: currentEnrollment?.program,
                     status: currentEnrollment?.status,
                     hasActiveEnrollment: hasActiveEnrollment ? 'Yes' : 'No',
+                    transferCategory,
                     ownershipOu: teiDetails?.programOwners?.[teiDetails?.programOwners.length - 1]?.orgUnit ??
                         teiDetails?.programOwners?.[0]?.orgUnit,
                 } : {
@@ -132,23 +176,27 @@ export function formatAdmissionRowsData({ teiInstances, registrationInstances, a
             const transferEvent = teiEvents.find((event: any) => {
                 const psId = event.programStage || event.programStageId;
                 const configPsId = transferConfig.transferProgramStage;
-                return psId === configPsId || (typeof psId === 'object' && psId?.id === configPsId);
+                return psId === configPsId || (typeof psId === 'object' && (psId?.id === configPsId || psId === configPsId));
             });
 
             if (transferEvent) {
-                const destinySchool = transferEvent.dataValues?.find((dv: any) => dv.dataElement === transferConfig.destinySchoolDataElement)?.value;
-                const originSchool = transferConfig.originSchoolDataElement 
+                const destinySchoolValue = transferEvent.dataValues?.find((dv: any) => dv.dataElement === transferConfig.destinySchoolDataElement)?.value;
+                const originSchoolValue = transferConfig.originSchoolDataElement 
                     ? transferEvent.dataValues?.find((dv: any) => dv.dataElement === transferConfig.originSchoolDataElement)?.value
                     : null;
                 
-                const eventOrgUnitId = transferEvent.orgUnitId || (typeof transferEvent.orgUnit === 'object' ? transferEvent.orgUnit?.id : transferEvent.orgUnit);
+                const destinySchool = typeof destinySchoolValue === 'object' ? destinySchoolValue?.id : destinySchoolValue;
+                const originSchool = typeof originSchoolValue === 'object' ? originSchoolValue?.id : originSchoolValue;
 
-                if (destinySchool === orgUnit) {
+                const eventOrgUnitId = transferEvent.orgUnitId || (typeof transferEvent.orgUnit === 'object' ? (transferEvent.orgUnit?.id || transferEvent.orgUnit) : transferEvent.orgUnit);
+
+                if (destinySchool === orgUnit || (typeof destinySchool === 'object' && destinySchool?.id === orgUnit)) {
                     transferCategory = "Transfer IN";
-                } else if ((eventOrgUnitId === orgUnit || originSchool === orgUnit) && destinySchool && destinySchool !== orgUnit) {
+                } else if ((eventOrgUnitId === orgUnit || originSchool === orgUnit || (typeof originSchool === 'object' && originSchool?.id === orgUnit)) && destinySchool && destinySchool !== orgUnit) {
                     transferCategory = "Transfer OUT";
-                } else if (originSchool === orgUnit && !destinySchool) {
-                    // Fallback for cases where destinySchool might be missing but origin matches
+                } else if ((originSchool === orgUnit || (typeof originSchool === 'object' && originSchool?.id === orgUnit)) && !destinySchool) {
+                    transferCategory = "Transfer OUT";
+                } else if (eventOrgUnitId === orgUnit && destinySchool && destinySchool !== orgUnit) {
                     transferCategory = "Transfer OUT";
                 }
             }

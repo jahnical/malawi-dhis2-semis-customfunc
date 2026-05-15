@@ -12,8 +12,8 @@ interface EventQueryProps {
     orgUnit?: string
     filter?: string[]
     filterAttributes?: string[]
-    trackedEntities?: string
-    trackedEntity?: string
+    trackedEntities?: string | string[]
+    trackedEntity?: string | string[]
     ouMode?: string
     occurredAfter?: string
     occurredBefore?: string
