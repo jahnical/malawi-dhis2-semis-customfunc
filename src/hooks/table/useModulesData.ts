@@ -326,27 +326,54 @@ export function useModulesData() {
         let registrationEvents: any[] = [];
         if (teis.length > 0 && baseProgramStage) {
             const stagesToQuery = [baseProgramStage, transferConfig?.transferProgramStage].filter(Boolean);
+            
+            // We only query events for TEIs that were successfully resolved/found
+            const validTeiIds = teis.map((t: any) => t.trackedEntity);
             const batchSize = 10;
             const teiBatches = [];
-            for (let i = 0; i < teis.length; i += batchSize) {
-                teiBatches.push(teis.slice(i, i + batchSize));
+            for (let i = 0; i < validTeiIds.length; i += batchSize) {
+                teiBatches.push(validTeiIds.slice(i, i + batchSize));
             }
 
             const eventsQueries: any[] = [];
             for (const stage of stagesToQuery) {
-                const queries = teiBatches.map(batch =>
-                    getCompleteEvents({
-                        ouMode: "ACCESSIBLE",
-                        program: program as unknown as string,
-                        programStage: stage,
-                        trackedEntity: batch.map((x: any) => x.trackedEntity).join(";"),
-                        paging: false,
-                    }).catch(error => {
-                        console.error(`Error fetching events for stage ${stage} batch`, batch, error);
-                        return null;
-                    })
-                );
-                eventsQueries.push(...queries);
+                for (const batch of teiBatches) {
+                    const query = async () => {
+                        try {
+                            const response = await getCompleteEvents({
+                                ouMode: "ACCESSIBLE",
+                                program: program as unknown as string,
+                                programStage: stage,
+                                trackedEntity: batch.join(";"),
+                                paging: false,
+                            });
+                            return response;
+                        } catch (error: any) {
+                            // If a batch fails (e.g., 400 Bad Request because one TEI is invalid),
+                            // try fetching events individually for each TEI in this batch.
+                            console.warn(`Batch request failed for stage ${stage}, retrying individually...`, batch, error);
+                            const individualEvents: any[] = [];
+                            for (const teiId of batch) {
+                                try {
+                                    const response = await getCompleteEvents({
+                                        ouMode: "ACCESSIBLE",
+                                        program: program as unknown as string,
+                                        programStage: stage,
+                                        trackedEntity: teiId,
+                                        paging: false,
+                                    });
+                                    const events = response?.results?.instances ?? response?.results?.events ?? [];
+                                    individualEvents.push(...events);
+                                } catch (indError) {
+                                    console.error(`Failed to fetch events for individual TEI ${teiId}`, indError);
+                                }
+                            }
+                            // Return a mock response structure that the loop below expects
+                            return { results: { instances: individualEvents } };
+                        }
+                    };
+                    eventsQueries.push(query());
+                }
             }
 
             try {

@@ -129,14 +129,26 @@ export function formatAdmissionRowsData({ teiInstances, registrationInstances, a
         // Determine transfer status
         let transferCategory = "_";
         if (transferConfig) {
-            const transferEvent = teiEvents.find((event: any) =>
-                (event.programStage === transferConfig.transferProgramStage || event.programStageId === transferConfig.transferProgramStage)
-            );
+            const transferEvent = teiEvents.find((event: any) => {
+                const psId = event.programStage || event.programStageId;
+                const configPsId = transferConfig.transferProgramStage;
+                return psId === configPsId || (typeof psId === 'object' && psId?.id === configPsId);
+            });
+
             if (transferEvent) {
                 const destinySchool = transferEvent.dataValues?.find((dv: any) => dv.dataElement === transferConfig.destinySchoolDataElement)?.value;
+                const originSchool = transferConfig.originSchoolDataElement 
+                    ? transferEvent.dataValues?.find((dv: any) => dv.dataElement === transferConfig.originSchoolDataElement)?.value
+                    : null;
+                
+                const eventOrgUnitId = transferEvent.orgUnitId || (typeof transferEvent.orgUnit === 'object' ? transferEvent.orgUnit?.id : transferEvent.orgUnit);
+
                 if (destinySchool === orgUnit) {
                     transferCategory = "Transfer IN";
-                } else if ((transferEvent.orgUnit === orgUnit || transferEvent.orgUnitId === orgUnit) && destinySchool && destinySchool !== orgUnit) {
+                } else if ((eventOrgUnitId === orgUnit || originSchool === orgUnit) && destinySchool && destinySchool !== orgUnit) {
+                    transferCategory = "Transfer OUT";
+                } else if (originSchool === orgUnit && !destinySchool) {
+                    // Fallback for cases where destinySchool might be missing but origin matches
                     transferCategory = "Transfer OUT";
                 }
             }
