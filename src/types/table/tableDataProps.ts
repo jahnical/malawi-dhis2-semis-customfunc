@@ -20,6 +20,12 @@ interface GetTableDataProps {
     academicYear?: string
     enrollmentStatusAcademicYear?: string
     academicYearDataElement?: string
+    filterAdmissionByEventAcademicYear?: boolean
+    ouMode?: string
+    transferConfig?: {
+        transferProgramStage: string
+        destinySchoolDataElement: string
+    }
 }
 
 interface GetAttendanceDataProps {
