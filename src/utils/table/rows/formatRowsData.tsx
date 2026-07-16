@@ -202,36 +202,25 @@ export function formatAdmissionRowsData({ teiInstances, registrationInstances, a
             }
         }
 
-        // Determine enrollment status by checking for an ACTIVE enrollment
-        // in the current/default academic year.
-        // Registration events store the academic year as a data element value.
-        // We match events for the status year, then check if their enrollment is ACTIVE.
+        // Determine enrollment status by checking for a registration event in the
+        // current/default academic year. A matching event is enough on its own —
+        // we deliberately do NOT require its enrollment to still be ACTIVE, since
+        // the underlying enrollment can later be completed/cancelled (e.g. after a
+        // transfer) while the student remains genuinely enrolled for that year.
+        // With no academic year to check against, isEnrolled stays false — no
+        // "any active enrollment" fallback guess.
         let isEnrolled = false;
         const statusAcademicYear = enrollmentStatusAcademicYear ?? academicYear;
         if (statusAcademicYear) {
-            const matchingEnrollmentIds = new Set(
-                teiEvents
-                    .filter((event: any) =>
-                        (event.dataValues ?? []).some((dv: any) => {
-                            const matchesConfiguredAcademicYearElement = academicYearDataElement
-                                ? dv.dataElement === academicYearDataElement
-                                : true;
+            isEnrolled = teiEvents.some((event: any) =>
+                (event.dataValues ?? []).some((dv: any) => {
+                    const matchesConfiguredAcademicYearElement = academicYearDataElement
+                        ? dv.dataElement === academicYearDataElement
+                        : true;
 
-                            return matchesConfiguredAcademicYearElement && matchesAcademicYearValue(dv.value, statusAcademicYear);
-                        })
-                    )
-                    .map((event: any) => event.enrollment)
+                    return matchesConfiguredAcademicYearElement && matchesAcademicYearValue(dv.value, statusAcademicYear);
+                })
             );
-            isEnrolled = (tei.enrollments ?? []).some(
-                (e: any) => {
-                    return matchingEnrollmentIds.has(e.enrollment) && e.status === 'ACTIVE';
-                }
-            );
-        } else {
-            // Fallback: if no academic year filter, check if there's any ACTIVE enrollment
-            // beyond the initial admission (more than 1 enrollment with at least one ACTIVE)
-            const enrollmentCount = tei.enrollments?.length ?? 0;
-            isEnrolled = enrollmentCount > 1 && (tei.enrollments ?? []).some((e: any) => e.status === 'ACTIVE');
         }
         const currentEnrollment = activeEnrollment ?? tei.enrollments?.[0];
 
