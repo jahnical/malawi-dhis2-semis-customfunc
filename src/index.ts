@@ -3,6 +3,7 @@ import { useTableData } from "./hooks/table/useGetTableData"
 import { useHeader } from "./hooks/table/useHeader"
 import { useUrlParams } from "./hooks/commons/useQueryParams"
 import useGetSectionTypeLabel from "./hooks/commons/useGetSectionTypeLabel"
+import useSectionProfile from "./hooks/commons/useSectionProfile"
 import { useSaveTei } from "./hooks/tei/useSaveTei"
 import { useBuildForm } from "./hooks/form/useBuildForm"
 import { useGetPatternCode } from "./hooks/tei/useGetPatternCode"
@@ -26,6 +27,7 @@ import { useGetTotalAdmissions } from "./hooks/admission/useGetTotalAdmissions"
 import useShowAlerts from "./hooks/commons/useShowAlert"
 import useViewPortWidth from "./hooks/rwd/useViewPortWidth"
 import { formatStringToLowerCase, formatStringToTitleCase, capitalizeString } from "./utils/common/formatStringCase"
+import { getSectionLabels } from "./utils/common/getSectionLabels"
 import useUploadEvents from './hooks/events/useUploadEvents'
 import { unavailableSchoolDays } from './hooks/dates/unavailableSchoolDays'
 import { useValidation } from './hooks/template_validation/useValidation'
@@ -54,6 +56,7 @@ export {
     useUrlParams,
     RulesEngine,
     useGetSectionTypeLabel,
+    useSectionProfile,
     removeFalseKeys,
     useGetAttributes,
     useGetDataElements,
@@ -78,6 +81,7 @@ export {
     formatStringToLowerCase,
     formatStringToTitleCase,
     capitalizeString,
+    getSectionLabels,
     useDeleteTEI,
     useUploadEvents,
     unavailableSchoolDays,
@@ -98,3 +102,5 @@ export {
     applyAcademicYearPrefix,
     getAcademicYearUpperYear,
 }
+
+export type { SectionLabels } from "./utils/common/getSectionLabels"

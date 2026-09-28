@@ -1,9 +1,9 @@
 import { format } from "date-fns";
 import { HolidayType, type schoolCalendar } from "../../types/attendance/attendaceFormaterProps";
-import useGetSectionTypeLabel from "../commons/useGetSectionTypeLabel";
+import useSectionProfile from "../commons/useSectionProfile";
 
 export const unavailableSchoolDays = () => {
-    const { sectionName } = useGetSectionTypeLabel()
+    const { attendanceWithinClassPeriods } = useSectionProfile()
     const normalize = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
     function unavailableDays(date: Date, config: schoolCalendar) {
@@ -15,7 +15,7 @@ export const unavailableSchoolDays = () => {
             return true
         }
 
-        if (sectionName == 'student') {
+        if (attendanceWithinClassPeriods) {
             if (isClassPeriod(normalize(new Date(date)), config?.classPeriods) && isClassPeriod(normalize(new Date(date)), [{ startDate: config?.academicYear?.startDate, endDate: config?.academicYear?.endDate }])) {
                 return false
             } else return true
