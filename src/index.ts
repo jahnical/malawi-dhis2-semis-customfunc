@@ -1,5 +1,7 @@
 import { RulesEngine, RulesEngineWrapper } from "./hooks/programRules"
 import { useTableData } from "./hooks/table/useGetTableData"
+import { useTableSort } from "./hooks/table/useTableSort"
+import { sortTableRows } from "./utils/table/sort/sortTableRows"
 import { useHeader } from "./hooks/table/useHeader"
 import { useUrlParams } from "./hooks/commons/useQueryParams"
 import useGetSectionTypeLabel from "./hooks/commons/useGetSectionTypeLabel"
@@ -52,6 +54,8 @@ export {
     useBuildForm,
     useSaveTei,
     useTableData,
+    useTableSort,
+    sortTableRows,
     useHeader,
     useUrlParams,
     RulesEngine,
@@ -104,3 +108,4 @@ export {
 }
 
 export type { SectionLabels } from "./utils/common/getSectionLabels"
+export type { TableSort, SortOrder } from "./utils/table/sort/sortTableRows"

@@ -78,21 +78,37 @@ export function useModulesData() {
     const { cancelAllOperations, makeCancellablePromise } = RequestBroker({ requestRef })
     const engine = useDataEngine()
 
+    // DHIS2's tracker API no longer honours paging=false and still returns one page, so
+    // "load everything" means requesting pages until one comes back short.
+    const ALL_PAGES_PAGE_SIZE = 500
+    const ALL_PAGES_MAX_PAGES = 200
+    async function getAllEventPages(params: Record<string, any>) {
+        const events: any[] = []
+        for (let page = 1; page <= ALL_PAGES_MAX_PAGES; page++) {
+            const response = await getCompleteEvents({ ...params, page, pageSize: ALL_PAGES_PAGE_SIZE } as any)
+            const batch = response?.results?.instances ?? response?.results?.events ?? []
+            events.push(...batch)
+            if (batch.length < ALL_PAGES_PAGE_SIZE) break
+        }
+        return { results: { instances: events, pager: { page: 1, pageSize: events.length, pageCount: 1, total: events.length } } }
+    }
+
     async function getRegistrationData(tableDataProps: GetTableDataProps) {
         const { page, pageSize, order, program, orgUnit, baseProgramStage, attributeFilters, dataElementFilters, paging } = tableDataProps;
 
-        const eventsResults = await getCompleteEvents({
+        const query = {
             orgUnitMode: orgUnit != null ? "SELECTED" : "ACCESSIBLE",
-            page,
-            pageSize,
-            ...(paging ? { paging } : {}),
             program: program as unknown as string,
             order: order || "occurredAt:desc",
             programStage: baseProgramStage,
             filter: dataElementFilters,
             filterAttributes: attributeFilters,
             orgUnit: orgUnit
-        }).catch((error) => {
+        }
+        const eventsResults = await (paging === false
+            ? getAllEventPages(query)
+            : getCompleteEvents({ ...query, page, pageSize, ...(paging ? { paging } : {}) } as any)
+        ).catch((error) => {
             show({
                 message: `${("Could not get events")}: ${error.message}`,
                 type: { critical: true }
@@ -109,20 +125,19 @@ export function useModulesData() {
         cancelAllOperations()
         const { page, pageSize, order, program, orgUnit, baseProgramStage, attributeFilters, dataElementFilters, paging, transferConfig } = tableDataProps;
 
+        const eventsQuery = {
+            orgUnitMode: orgUnit != null ? "SELECTED" : "ACCESSIBLE",
+            program: program as unknown as string,
+            order: order || "occurredAt:desc",
+            programStage: baseProgramStage,
+            filter: dataElementFilters,
+            filterAttributes: attributeFilters,
+            orgUnit: orgUnit,
+        }
         const eventsResults = makeCancellablePromise(
-            getCompleteEvents({
-                orgUnitMode: orgUnit != null ? "SELECTED" : "ACCESSIBLE",
-                page,
-                pageSize,
-                ...(paging ? { paging } : {}),
-                program: program as unknown as string,
-                order: order || "occurredAt:desc",
-                programStage: baseProgramStage,
-                filter: dataElementFilters,
-                filterAttributes: attributeFilters,
-                orgUnit: orgUnit,
-                totalPages: true
-            })
+            (paging === false
+                ? getAllEventPages(eventsQuery)
+                : getCompleteEvents({ ...eventsQuery, page, pageSize, ...(paging ? { paging } : {}), totalPages: true } as any))
                 .catch((error) => {
                     show({
                         message: `${("Could not get events")}: ${error.message}`,

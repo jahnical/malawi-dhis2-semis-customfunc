@@ -1,4 +1,5 @@
 import { attendanceConfig } from "./FormatRowsDataTypes";
+import { type TableSort } from "../../utils/table/sort/sortTableRows";
 
 type TableDataProps = Record<string, string>;
 
@@ -26,6 +27,9 @@ interface GetTableDataProps {
         transferProgramStage: string
         destinySchoolDataElement: string
     }
+    // When set, the full filtered list is loaded once and sorted/paged in the browser
+    // `program` lets option-set columns sort by label
+    sort?: TableSort & { program?: unknown }
 }
 
 interface GetAttendanceDataProps {
