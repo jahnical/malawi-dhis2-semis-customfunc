@@ -97,3 +97,5 @@ export {
     useGetCompleteTeis,
     applyAcademicYearPrefix,
 }
+export { validateEnrollmentYear } from './utils/validateEnrollmentYear';
+export { useEnrollmentYearValidation } from './hooks/tei/useEnrollmentYearValidation';
