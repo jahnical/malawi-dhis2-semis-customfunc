@@ -1,4 +1,6 @@
 import { useState, useCallback } from "react";
+import useShowAlerts from "../commons/useShowAlert";
+import { formatTrackerError } from "../../utils/errors/trackerErrors";
 import { useDataEngine } from "@dhis2/app-runtime";
 
 const DELETE_ADMISSION_MUTATION = {
@@ -35,6 +37,7 @@ const returnAdmissionBody = (admission: any) => ({
 
 export function useDeleteAdmission() {
     const engine = useDataEngine();
+    const { show } = useShowAlerts();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<unknown>(null);
 
@@ -57,7 +60,9 @@ export function useDeleteAdmission() {
                 onComplete?.();
             } catch (err) {
                 setError(err);
-                onError?.(err);
+                // Without a handler the failure used to be silent; show the server's reason
+                if (onError) onError(err);
+                else show({ message: `${"Could not delete the admission"}: ${formatTrackerError(err)}`, type: { critical: true, duration: 15000 } });
             } finally {
                 setLoading(false);
             }
