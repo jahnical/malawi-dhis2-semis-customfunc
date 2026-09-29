@@ -123,7 +123,13 @@ export function useModulesData() {
 
     async function getBasicData(tableDataProps: GetTableDataProps) {
         cancelAllOperations()
-        const { page, pageSize, order, program, orgUnit, baseProgramStage, attributeFilters, dataElementFilters, paging, transferConfig } = tableDataProps;
+        const { page, pageSize, order, program, orgUnit, baseProgramStage, attributeFilters, dataElementFilters, paging } = tableDataProps;
+        // Transfer rows are recognised by their stage. If the transfer stage is missing or is the
+        // registration stage itself, every registration event would be dropped as a "transfer" and
+        // the list would come out empty, so skip the transfer column in that case.
+        const transferConfig = tableDataProps.transferConfig?.transferProgramStage && tableDataProps.transferConfig.transferProgramStage !== baseProgramStage
+            ? tableDataProps.transferConfig
+            : undefined;
 
         const eventsQuery = {
             orgUnitMode: orgUnit != null ? "SELECTED" : "ACCESSIBLE",
