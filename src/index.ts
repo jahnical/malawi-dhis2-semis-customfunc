@@ -30,6 +30,7 @@ import useShowAlerts from "./hooks/commons/useShowAlert"
 import useViewPortWidth from "./hooks/rwd/useViewPortWidth"
 import { formatStringToLowerCase, formatStringToTitleCase, capitalizeString } from "./utils/common/formatStringCase"
 import { getSectionLabels } from "./utils/common/getSectionLabels"
+import { getInfoInstructions } from "./utils/common/getInfoInstructions"
 import { formatTrackerError, getTrackerErrors, getProgramNames } from "./utils/errors/trackerErrors"
 import useUploadEvents from './hooks/events/useUploadEvents'
 import { unavailableSchoolDays } from './hooks/dates/unavailableSchoolDays'
@@ -87,6 +88,7 @@ export {
     formatStringToTitleCase,
     capitalizeString,
     getSectionLabels,
+    getInfoInstructions,
     formatTrackerError,
     getTrackerErrors,
     getProgramNames,
