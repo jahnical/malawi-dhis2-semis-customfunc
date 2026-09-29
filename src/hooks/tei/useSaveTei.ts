@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useDataEngine } from "@dhis2/app-runtime"
 import useShowAlerts from '../commons/useShowAlert';
+import { formatTrackerError, getProgramNames } from "../../utils/errors/trackerErrors";
 
 const SAVE_TEI: any = {
     resource: "tracker",
@@ -14,12 +15,13 @@ const SAVE_TEI: any = {
 
 export function useSaveTei():any {
     const engine = useDataEngine()
-    const { hide, show } = useShowAlerts()
+    const { show } = useShowAlerts()
     const [error, setError] = useState<boolean>()
     const [response, setResponse] = useState<any>()
     const [loading, setLoading] = useState<boolean>()
 
-    const saveTei = async ({ data, messages, handleComplete }: { data: any, messages: { error: string, sucess: string }, handleComplete?: () => void }) => {
+    // `program` lets error messages name the attribute (e.g. "LIN") instead of showing its id
+    const saveTei = async ({ data, messages, handleComplete, program }: { data: any, messages: { error: string, sucess: string }, handleComplete?: () => void, program?: any }) => {
         setLoading(true)
         return await engine.mutate(SAVE_TEI, {
             variables: { data },
@@ -35,11 +37,11 @@ export function useSaveTei():any {
             onError: (error) => {
                 setError(true)
                 setLoading(false)
+                // The server's reason (e.g. "Non-unique attribute value ...") rather than "Forbidden"
                 show({
-                    message: `${messages.error}: ${error.message}`,
-                    type: { critical: true }
+                    message: `${messages.error}: ${formatTrackerError(error, { names: getProgramNames(program) })}`,
+                    type: { critical: true, duration: 15000 }
                 });
-                setTimeout(hide, 5000);
             }
         })
     }

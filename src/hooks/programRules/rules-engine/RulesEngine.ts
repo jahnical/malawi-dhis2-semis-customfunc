@@ -1,7 +1,6 @@
 import isEqual from "lodash.isequal";
-import { monthsBetween } from '../../../utils/dates/monthsBetween';
 import { useRecoilValue } from "recoil";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useFormatProgramRules } from "../hooks/useFormatProgramRules";
 import { OptionGroupsConfigState } from "../../../schema/optionGroupsSchema";
 import { OrgUnitsGroupsConfigState } from "../../../schema/orgUnitsGroupSchema";
@@ -24,22 +23,24 @@ export const CustomDhis2RulesEngine = (props: RulesEngineProps) => {
     const [currentValues, setCurrentValues] = useState({ ...props.values });
     const [updatedVariables, setUpdatedVariables] = useState<any[]>(Array.isArray(props.variables) ? [...props.variables] : []);
 
+    // Callers often rebuild `variables` on every render; only react when the fields really change,
+    // and re-apply the rules rather than replacing the result with the raw fields
+    const lastVariables = useRef<any[]>(props.variables);
     useEffect(() => {
-        if (!isEqual(updatedVariables, props.variables)) {
-            setUpdatedVariables([...props.variables]);
+        if (!isEqual(lastVariables.current, props.variables)) {
+            lastVariables.current = props.variables;
+            runRulesEngine({ overrideVariables: props.variables, overrideValues: currentValues });
         }
     }, [props.variables]);
 
     function runRulesEngine(arg?: { overrideVariables?: any[], overrideValues?: Record<string, any> }) {
         const { overrideVariables = [], overrideValues = {} } = arg || {};
         const variablesToUse = overrideVariables.length ? overrideVariables : props.variables;
-        const valuesToUse = Object.keys(overrideValues).length ? overrideValues : props.values;
+        // Copy so ASSIGN actions don't write into the caller's (form) state
+        const valuesToUse = { ...(Object.keys(overrideValues).length ? overrideValues : props.values) };
 
         if (!isEqual(currentValues, valuesToUse)) {
             setCurrentValues({ ...valuesToUse });
-        }
-        if (!isEqual(updatedVariables, variablesToUse)) {
-            setUpdatedVariables([...variablesToUse]);
         }
 
         if (type === "programStageSection") rulesEngineSections(variablesToUse, valuesToUse);
@@ -55,7 +56,9 @@ export const CustomDhis2RulesEngine = (props: RulesEngineProps) => {
                 return applyRulesToVariable(copy, values);
             })
         }));
-        setUpdatedVariables(updated);
+        if (!isEqual(updatedVariables, updated)) {
+            setUpdatedVariables(updated);
+        }
     }
 
     function rulesEngineSections(variables: any[], values: Record<string, any>) {
@@ -66,7 +69,9 @@ export const CustomDhis2RulesEngine = (props: RulesEngineProps) => {
                 return applyRulesToVariable(copy, values);
             })
         }));
-        setUpdatedVariables(updated);
+        if (!isEqual(updatedVariables, updated)) {
+            setUpdatedVariables(updated);
+        }
     }
 
     function rulesEngineDataElements(variables: any[], values: Record<string, any>) {
@@ -74,7 +79,9 @@ export const CustomDhis2RulesEngine = (props: RulesEngineProps) => {
             const copy = { ...variable };
             return applyRulesToVariable(copy, values);
         });
-        setUpdatedVariables(updated);
+        if (!isEqual(updatedVariables, updated)) {
+            setUpdatedVariables(updated);
+        }
     }
 
 
@@ -83,16 +90,19 @@ export const CustomDhis2RulesEngine = (props: RulesEngineProps) => {
             return "undefined";
         }
 
-        const lower = value.toLowerCase();
+        if (typeof value === "number" || typeof value === "boolean") return value;
+
+        const text = String(value);
+        const lower = text.toLowerCase();
 
         if (lower === "true") return true;
         if (lower === "false") return false;
 
-        if (!isNaN(value) && value.trim() !== "") {
-            return Number(value);
+        if (!isNaN(text as any) && text.trim() !== "") {
+            return Number(text);
         }
 
-        return `'${value}'`;
+        return `'${text.replace(/'/g, "\\'")}'`;
     }
 
 
@@ -132,7 +142,6 @@ export const CustomDhis2RulesEngine = (props: RulesEngineProps) => {
 
         return {
             hasValue: (value: any) => value !== null && value !== undefined && value !== '',
-            monthsBetween,
             yearsBetween: (date1: any, date2: any) => {
                 const d1 = new Date(date1);
                 const d2 = new Date(date2);
@@ -146,6 +155,28 @@ export const CustomDhis2RulesEngine = (props: RulesEngineProps) => {
                 const d1 = new Date(date1) as unknown as number;
                 const d2 = new Date(date2) as unknown as number;
                 return Math.ceil(Math.abs(d2 - d1) / (1000 * 60 * 60 * 24));
+            },
+            // Whole weeks from date1 to date2; negative when date2 is earlier
+            weeksBetween: (date1: any, date2: any) => {
+                const d1 = new Date(date1) as unknown as number;
+                const d2 = new Date(date2) as unknown as number;
+                return Math.trunc((d2 - d1) / (1000 * 60 * 60 * 24 * 7));
+            },
+            // Whole months from date1 to date2; negative when date2 is earlier.
+            // Matches DHIS2 (Joda-Time): adding months clamps to month end, so Jan 31 -> Feb 28 is 1 month
+            monthsBetween: (date1: any, date2: any) => {
+                const d1 = new Date(date1);
+                const d2 = new Date(date2);
+                const addMonths = (date: Date, n: number) => {
+                    const year = date.getUTCFullYear();
+                    const month = date.getUTCMonth() + n;
+                    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+                    return new Date(Date.UTC(year, month, Math.min(date.getUTCDate(), lastDay)));
+                };
+                let months = (d2.getUTCFullYear() - d1.getUTCFullYear()) * 12 + (d2.getUTCMonth() - d1.getUTCMonth());
+                if (months > 0 && addMonths(d1, months) > d2) months--;
+                if (months < 0 && addMonths(d1, months) < d2) months++;
+                return months;
             },
             addDays: (date: any, days: any) => {
                 const d = new Date(date);
@@ -172,6 +203,11 @@ export const CustomDhis2RulesEngine = (props: RulesEngineProps) => {
     }
 
     function applyRulesToVariable(variable: any, values: Record<string, any>) {
+        // Feedback is rebuilt from scratch on every run; any rule that fires adds to it
+        variable.warning = false;
+        variable.error = false;
+        const messages: string[] = [];
+
         for (const rule of newProgramRules.filter(x => x.variable === variable.id)) {
             const conditionResult = evaluateExpression(rule.condition, variable, values, programRulesVariables);
 
@@ -193,14 +229,17 @@ export const CustomDhis2RulesEngine = (props: RulesEngineProps) => {
                     break;
 
                 case "SHOWWARNING":
-                    variable.warning = !!conditionResult;
-                    variable.content = conditionResult ? rule.content : "";
+                    if (conditionResult) {
+                        variable.warning = true;
+                        if (rule.content) messages.push(rule.content);
+                    }
                     break;
 
                 case "SHOWERROR":
-                    variable.error = !!conditionResult;
-                    // variable.required = !!conditionResult;
-                    variable.content = conditionResult ? rule.content : "";
+                    if (conditionResult) {
+                        variable.error = true;
+                        if (rule.content) messages.push(rule.content);
+                    }
                     break;
 
                 case "HIDEFIELD":
@@ -225,6 +264,7 @@ export const CustomDhis2RulesEngine = (props: RulesEngineProps) => {
                     break;
             }
         }
+        variable.content = messages.join(" ");
         return variable;
     }
 

@@ -1,8 +1,11 @@
 import { RulesEngine, RulesEngineWrapper } from "./hooks/programRules"
 import { useTableData } from "./hooks/table/useGetTableData"
+import { useTableSort } from "./hooks/table/useTableSort"
+import { sortTableRows } from "./utils/table/sort/sortTableRows"
 import { useHeader } from "./hooks/table/useHeader"
 import { useUrlParams } from "./hooks/commons/useQueryParams"
 import useGetSectionTypeLabel from "./hooks/commons/useGetSectionTypeLabel"
+import useSectionProfile from "./hooks/commons/useSectionProfile"
 import { useSaveTei } from "./hooks/tei/useSaveTei"
 import { useBuildForm } from "./hooks/form/useBuildForm"
 import { useGetPatternCode } from "./hooks/tei/useGetPatternCode"
@@ -26,6 +29,9 @@ import { useGetTotalAdmissions } from "./hooks/admission/useGetTotalAdmissions"
 import useShowAlerts from "./hooks/commons/useShowAlert"
 import useViewPortWidth from "./hooks/rwd/useViewPortWidth"
 import { formatStringToLowerCase, formatStringToTitleCase, capitalizeString } from "./utils/common/formatStringCase"
+import { getSectionLabels } from "./utils/common/getSectionLabels"
+import { getInfoInstructions } from "./utils/common/getInfoInstructions"
+import { formatTrackerError, getTrackerErrors, getProgramNames } from "./utils/errors/trackerErrors"
 import useUploadEvents from './hooks/events/useUploadEvents'
 import { unavailableSchoolDays } from './hooks/dates/unavailableSchoolDays'
 import { useValidation } from './hooks/template_validation/useValidation'
@@ -42,7 +48,7 @@ import { useCacheData } from "./hooks/useCacheData/useCacheData"
 import { useGetPatternCodeParams } from "./hooks/tei/useGetPatternCodeParams"
 import { useGetCompleteEvents } from "./hooks/events/useGetCompleteEvents"
 import { useGetCompleteTeis } from "./hooks/tei/useGetCompleteTei"
-import { applyAcademicYearPrefix } from "./utils/helpers/applyAcademicYearPrefix"
+import { applyAcademicYearPrefix, getAcademicYearUpperYear } from "./utils/helpers/applyAcademicYearPrefix"
 
 
 
@@ -50,10 +56,13 @@ export {
     useBuildForm,
     useSaveTei,
     useTableData,
+    useTableSort,
+    sortTableRows,
     useHeader,
     useUrlParams,
     RulesEngine,
     useGetSectionTypeLabel,
+    useSectionProfile,
     removeFalseKeys,
     useGetAttributes,
     useGetDataElements,
@@ -78,6 +87,11 @@ export {
     formatStringToLowerCase,
     formatStringToTitleCase,
     capitalizeString,
+    getSectionLabels,
+    getInfoInstructions,
+    formatTrackerError,
+    getTrackerErrors,
+    getProgramNames,
     useDeleteTEI,
     useUploadEvents,
     unavailableSchoolDays,
@@ -96,6 +110,10 @@ export {
     useGetCompleteEvents,
     useGetCompleteTeis,
     applyAcademicYearPrefix,
+    getAcademicYearUpperYear,
 }
 export { validateEnrollmentYear } from './utils/validateEnrollmentYear';
 export { useEnrollmentYearValidation } from './hooks/tei/useEnrollmentYearValidation';
+
+export type { SectionLabels } from "./utils/common/getSectionLabels"
+export type { TableSort, SortOrder } from "./utils/table/sort/sortTableRows"

@@ -1,5 +1,5 @@
 import { useRecoilState } from "recoil";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useDataQuery } from "@dhis2/app-runtime";
 import useShowAlerts from "../../commons/useShowAlert";
 import { ProgramRulesVariablesConfigState } from "../../../schema/programRulesVariablesSchema";
@@ -29,10 +29,17 @@ export function useGetProgramRulesVariables(programs: string[]):any {
     const { getDataFromDB, saveDataToDB } = useCacheData();
     const [error, setError] = useState<boolean>(false)
     const [, setProgramRuleVariablesConfigState] = useRecoilState(ProgramRulesVariablesConfigState);
+    const fetchedFilterRef = useRef<string | null>(null);
+
+    const programFilter = useMemo(() => {
+        const normalizedPrograms = Array.from(new Set((programs || []).filter(Boolean))).sort();
+        if (normalizedPrograms.length === 0) return "";
+        return `program.id:in:[${normalizedPrograms.join(",")}]`;
+    }, [programs]);
 
     const { data, loading: loadingPRulesVariables, refetch } = useDataQuery<ProgramRulesVariablesQueryResponse>(PROGRAM_RULES_VARIABLES_QUERY, {
         variables: {
-            programFilter: `program.id:in:[${programs.join(",")}]`
+            programFilter
         },
         onError(error: { message: string }) {
             show({
@@ -54,11 +61,15 @@ export function useGetProgramRulesVariables(programs: string[]):any {
             const cached = await getDataFromDB('programRuleVariables', 'programRuleVariables');
             if (cached?.data && Array.isArray(cached.data) && cached.data.length > 0) {
                 setProgramRuleVariablesConfigState(cached.data);
-            } else {
-                void refetch();
             }
+
+            if (!programFilter) return;
+            if (fetchedFilterRef.current === programFilter) return;
+
+            fetchedFilterRef.current = programFilter;
+            void refetch({ programFilter });
         })();
-    }, [])
+    }, [programFilter])
 
     return { loadingPRulesVariables, refetch, errorPRulesVariables: error }
 }

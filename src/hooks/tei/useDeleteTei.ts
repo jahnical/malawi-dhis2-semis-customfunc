@@ -1,4 +1,6 @@
 import { useCallback, useState } from "react";
+import useShowAlerts from "../commons/useShowAlert";
+import { formatTrackerError } from "../../utils/errors/trackerErrors";
 import { useDataEngine } from "@dhis2/app-runtime";
 
 
@@ -37,6 +39,7 @@ const returnTrackerBody = (trackedEntity: any) => ({
 
 export function useDeleteTEI(): any {
     const engine = useDataEngine();
+    const { show } = useShowAlerts();
     const [error, setError] = useState<unknown>(null)
     const [loading, setLoading] = useState<boolean>(false)
 
@@ -61,7 +64,9 @@ export function useDeleteTEI(): any {
                 onComplete?.();
             } catch (err) {
                 setError(err);
-                onError?.(err);
+                // Without a handler the failure used to be silent; show the server's reason
+                if (onError) onError(err);
+                else show({ message: `${"Could not delete the record"}: ${formatTrackerError(err)}`, type: { critical: true, duration: 15000 } });
             } finally {
                 setLoading(false);
             }

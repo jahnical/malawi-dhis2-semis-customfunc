@@ -3,10 +3,17 @@ import { dataValuesProps } from "../../../types/api/WithoutRegistrationTypes";
 import { attendanceConfig, AttendanceFormaterProps } from "src/types/table/FormatRowsDataTypes";
 import { FormatResponseRowsProps, RowsDataProps } from "../../../types/common/FormatRowsDataProps";
 
-export function formatRowsData({ registrationInstances, teiInstances, isBasicStage = false }: FormatResponseRowsProps): RowsDataProps[] {
+export function formatRowsData({ registrationInstances, teiInstances, isBasicStage = false, transferConfig, orgUnit }: FormatResponseRowsProps): RowsDataProps[] {
     const allRows: RowsDataProps[] = [];
 
-    for (const event of registrationInstances ?? []) {
+    // Separate registration events from other events (like transfer events)
+    // In basic stage, we usually display one row per enrollment/registration event
+    const mainEvents = registrationInstances?.filter(e => !transferConfig || (e.programStage || e.programStageId) !== transferConfig.transferProgramStage) ?? [];
+    
+    // If no main events (e.g. only transfer events fetched), we might need to use all registrationInstances
+    const eventsToMap = mainEvents.length > 0 ? mainEvents : (registrationInstances ?? []);
+
+    for (const event of eventsToMap) {
         const teiDetails = teiInstances?.find(tei => tei.trackedEntity === event.trackedEntity);
 
         // Find the enrollment that matches the current academic year event's 
@@ -14,6 +21,42 @@ export function formatRowsData({ registrationInstances, teiInstances, isBasicSta
 
         // Check if the TEI has any active enrollment
         const hasActiveEnrollment = teiDetails?.enrollments?.some(enrollment => enrollment.status === 'ACTIVE') ?? false;
+
+        // Determine transfer status
+        let transferCategory = "_";
+        if (transferConfig) {
+            // Look through ALL instances for this TEI to find the transfer event
+            const teiEvents = (registrationInstances ?? [])
+                .filter((e: any) => e.trackedEntity === event.trackedEntity);
+
+            const transferEvent = teiEvents.find((e: any) => {
+                const psId = e.programStage || e.programStageId;
+                const configPsId = transferConfig.transferProgramStage;
+                return psId === configPsId || (typeof psId === 'object' && (psId?.id === configPsId || psId === configPsId));
+            });
+
+            if (transferEvent) {
+                const destinySchoolValue = transferEvent.dataValues?.find((dv: any) => dv.dataElement === transferConfig.destinySchoolDataElement)?.value;
+                const originSchoolValue = transferConfig.originSchoolDataElement
+                    ? transferEvent.dataValues?.find((dv: any) => dv.dataElement === transferConfig.originSchoolDataElement)?.value
+                    : null;
+
+                const destinySchool = (typeof destinySchoolValue === 'object' && destinySchoolValue !== null) ? (destinySchoolValue as any)?.id : destinySchoolValue;
+                const originSchool = (typeof originSchoolValue === 'object' && originSchoolValue !== null) ? (originSchoolValue as any)?.id : originSchoolValue;
+
+                const eventOrgUnitId = transferEvent.orgUnitId || (typeof transferEvent.orgUnit === 'object' ? (transferEvent.orgUnit?.id || transferEvent.orgUnit) : transferEvent.orgUnit);
+
+                if (destinySchool === orgUnit || (typeof destinySchool === 'object' && destinySchool?.id === orgUnit)) {
+                    transferCategory = "Transfer IN";
+                } else if ((eventOrgUnitId === orgUnit || originSchool === orgUnit || (typeof originSchool === 'object' && originSchool?.id === orgUnit)) && destinySchool && destinySchool !== orgUnit) {
+                    transferCategory = "Transfer OUT";
+                } else if ((originSchool === orgUnit || (typeof originSchool === 'object' && originSchool?.id === orgUnit)) && !destinySchool) {
+                    transferCategory = "Transfer OUT";
+                } else if (eventOrgUnitId === orgUnit && destinySchool && destinySchool !== orgUnit) {
+                    transferCategory = "Transfer OUT";
+                }
+            }
+        }
 
         allRows.push({
             ...dataValues(event.dataValues),
@@ -31,6 +74,7 @@ export function formatRowsData({ registrationInstances, teiInstances, isBasicSta
                     programId: currentEnrollment?.program,
                     status: currentEnrollment?.status,
                     hasActiveEnrollment: hasActiveEnrollment ? 'Yes' : 'No',
+                    transferCategory,
                     ownershipOu: teiDetails?.programOwners?.[teiDetails?.programOwners.length - 1]?.orgUnit ??
                         teiDetails?.programOwners?.[0]?.orgUnit,
                 } : {
@@ -70,49 +114,113 @@ function formatRegistrationEvents(events: any[] = []): RowsDataProps[] {
     }));
 }
 
+function extractAcademicYearTokens(value: unknown): string[] {
+    if (value === undefined || value === null) return [];
+    const matches = String(value).match(/\d{4}/g);
+    return matches ?? [];
+}
+
+function matchesAcademicYearValue(eventAcademicYearValue: unknown, statusAcademicYear: unknown): boolean {
+    if (eventAcademicYearValue === undefined || eventAcademicYearValue === null) return false;
+    if (statusAcademicYear === undefined || statusAcademicYear === null) return false;
+
+    const eventValue = String(eventAcademicYearValue).trim();
+    const statusValue = String(statusAcademicYear).trim();
+
+    if (!eventValue || !statusValue) return false;
+    if (eventValue === statusValue) return true;
+
+    const eventTokens = extractAcademicYearTokens(eventValue);
+    const statusTokens = extractAcademicYearTokens(statusValue);
+
+    if (!eventTokens.length || !statusTokens.length) {
+        return false;
+    }
+
+    return eventTokens.some((token) => statusTokens.includes(token));
+}
+
 /**
  * TEI-first row formatter for the Admission module.
  * Iterates over TEIs (not events), attaching registration event data when available.
  * This ensures TEIs without registration events still appear in the table.
  */
-export function formatAdmissionRowsData({ teiInstances, registrationInstances, academicYear, enrollmentStatusAcademicYear, academicYearDataElement }: FormatResponseRowsProps): RowsDataProps[] {
+export function formatAdmissionRowsData({ teiInstances, registrationInstances, academicYear, enrollmentStatusAcademicYear, academicYearDataElement, filterAdmissionByEventAcademicYear, orgUnit, transferConfig }: FormatResponseRowsProps): RowsDataProps[] {
     const allRows: RowsDataProps[] = [];
 
     for (const tei of teiInstances ?? []) {
-        // Find the most recent registration event for this TEI
+        // Find registration events for this TEI
         const teiEvents = (registrationInstances ?? [])
             .filter((event: any) => event.trackedEntity === tei.trackedEntity)
             .sort((a: any, b: any) => new Date(b.occurredAt || 0).getTime() - new Date(a.occurredAt || 0).getTime());
+
+        // Fallback academic-year filtering for configurations without an
+        // admission-date attribute. When admission-date filtering is active,
+        // requiring a registration event would hide valid admission-only TEIs.
+        if (filterAdmissionByEventAcademicYear && academicYear && academicYearDataElement) {
+            const hasEventForSelectedYear = teiEvents.some((event: any) =>
+                (event.dataValues ?? []).some((dv: any) =>
+                    dv.dataElement === academicYearDataElement && matchesAcademicYearValue(dv.value, academicYear)
+                )
+            );
+            if (!hasEventForSelectedYear) continue;
+        }
+
         const mostRecentEvent = teiEvents[0];
         const activeEnrollment = tei.enrollments?.find((e: any) => e.status === 'ACTIVE');
         const eventForDisplayedValues = mostRecentEvent;
 
-        // Determine enrollment status by checking for an ACTIVE enrollment
-        // in the current/default academic year.
-        // Registration events store the academic year as a data element value.
-        // We match events for the status year, then check if their enrollment is ACTIVE.
+        // Determine transfer status
+        let transferCategory = "_";
+        if (transferConfig) {
+            const transferEvent = teiEvents.find((event: any) => {
+                const psId = event.programStage || event.programStageId;
+                const configPsId = transferConfig.transferProgramStage;
+                return psId === configPsId || (typeof psId === 'object' && (psId?.id === configPsId || psId === configPsId));
+            });
+
+            if (transferEvent) {
+                const destinySchoolValue = transferEvent.dataValues?.find((dv: any) => dv.dataElement === transferConfig.destinySchoolDataElement)?.value;
+                const originSchoolValue = transferConfig.originSchoolDataElement 
+                    ? transferEvent.dataValues?.find((dv: any) => dv.dataElement === transferConfig.originSchoolDataElement)?.value
+                    : null;
+                
+                const destinySchool = (typeof destinySchoolValue === 'object' && destinySchoolValue !== null) ? (destinySchoolValue as any)?.id : destinySchoolValue;
+                const originSchool = (typeof originSchoolValue === 'object' && originSchoolValue !== null) ? (originSchoolValue as any)?.id : originSchoolValue;
+
+                const eventOrgUnitId = transferEvent.orgUnitId || (typeof transferEvent.orgUnit === 'object' ? (transferEvent.orgUnit?.id || transferEvent.orgUnit) : transferEvent.orgUnit);
+
+                if (destinySchool === orgUnit || (typeof destinySchool === 'object' && destinySchool?.id === orgUnit)) {
+                    transferCategory = "Transfer IN";
+                } else if ((eventOrgUnitId === orgUnit || originSchool === orgUnit || (typeof originSchool === 'object' && originSchool?.id === orgUnit)) && destinySchool && destinySchool !== orgUnit) {
+                    transferCategory = "Transfer OUT";
+                } else if ((originSchool === orgUnit || (typeof originSchool === 'object' && originSchool?.id === orgUnit)) && !destinySchool) {
+                    transferCategory = "Transfer OUT";
+                } else if (eventOrgUnitId === orgUnit && destinySchool && destinySchool !== orgUnit) {
+                    transferCategory = "Transfer OUT";
+                }
+            }
+        }
+
+        // Determine enrollment status by checking for a registration event in the
+        // current/default academic year. A matching event is enough on its own —
+        // we deliberately do NOT require its enrollment to still be ACTIVE, since
+        // the underlying enrollment can later be completed/cancelled (e.g. after a
+        // transfer) while the student remains genuinely enrolled for that year.
+        // With no academic year to check against, isEnrolled stays false — no
+        // "any active enrollment" fallback guess.
         let isEnrolled = false;
         const statusAcademicYear = enrollmentStatusAcademicYear ?? academicYear;
-        if (statusAcademicYear && academicYearDataElement) {
-            const matchingEnrollmentIds = new Set(
-                teiEvents
-                    .filter((event: any) =>
-                        (event.dataValues ?? []).some((dv: any) =>
-                            dv.dataElement === academicYearDataElement && String(dv.value) === String(statusAcademicYear)
-                        )
-                    )
-                    .map((event: any) => event.enrollment)
+        if (statusAcademicYear) {
+            isEnrolled = teiEvents.some((event: any) =>
+                (event.dataValues ?? []).some((dv: any) => {
+                    const matchesConfiguredAcademicYearElement = academicYearDataElement
+                        ? dv.dataElement === academicYearDataElement
+                        : true;
+
+                    return matchesConfiguredAcademicYearElement && matchesAcademicYearValue(dv.value, statusAcademicYear);
+                })
             );
-            isEnrolled = (tei.enrollments ?? []).some(
-                (e: any) => {
-                    return matchingEnrollmentIds.has(e.enrollment) && e.status === 'ACTIVE';
-                }
-            );
-        } else {
-            // Fallback: if no academic year filter, check if there's any ACTIVE enrollment
-            // beyond the initial admission (more than 1 enrollment with at least one ACTIVE)
-            const enrollmentCount = tei.enrollments?.length ?? 0;
-            isEnrolled = enrollmentCount > 1 && (tei.enrollments ?? []).some((e: any) => e.status === 'ACTIVE');
         }
         const currentEnrollment = activeEnrollment ?? tei.enrollments?.[0];
 
@@ -167,6 +275,7 @@ export function formatAdmissionRowsData({ teiInstances, registrationInstances, a
             programId: currentEnrollment?.program,
             status: currentEnrollment?.status,
             hasActiveEnrollment: isEnrolled ? 'Yes' : 'No',
+            transferCategory,
             ownershipOu: tei.programOwners?.[tei.programOwners.length - 1]?.orgUnit ??
                 tei.programOwners?.[0]?.orgUnit,
         });

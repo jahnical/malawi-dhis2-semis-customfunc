@@ -1,5 +1,5 @@
 import { useRecoilState } from "recoil";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useDataQuery } from "@dhis2/app-runtime";
 import useShowAlerts from "../../commons/useShowAlert";
 import { ProgramRulesConfigState } from "../../../schema/programRulesSchema";
@@ -29,10 +29,17 @@ export function useGetProgramRules(programs: string[]):any {
     const { getDataFromDB, saveDataToDB } = useCacheData();
     const [error, setError] = useState<boolean>(false)
     const [, setProgramRulesConfigState] = useRecoilState(ProgramRulesConfigState);
+    const fetchedFilterRef = useRef<string | null>(null);
+
+    const programFilter = useMemo(() => {
+        const normalizedPrograms = Array.from(new Set((programs || []).filter(Boolean))).sort();
+        if (normalizedPrograms.length === 0) return "";
+        return `program.id:in:[${normalizedPrograms.join(",")}]`;
+    }, [programs]);
 
     const { data, loading: loadingPRules, refetch } = useDataQuery<ProgramRulesQueryResponse>(PROGRAM_RULES_QUERY, {
         variables: {
-            programFilter: `program.id:in:[${programs.join(",")}]`
+            programFilter
         },
         onError(error: { message: string }) {
             show({
@@ -54,11 +61,15 @@ export function useGetProgramRules(programs: string[]):any {
             const cached = await getDataFromDB('programRules', 'programRules');
             if (cached?.data && Array.isArray(cached.data) && cached.data.length > 0) {
                 setProgramRulesConfigState(cached.data);
-            } else {
-                void refetch();
             }
+
+            if (!programFilter) return;
+            if (fetchedFilterRef.current === programFilter) return;
+
+            fetchedFilterRef.current = programFilter;
+            void refetch({ programFilter });
         })();
-    }, [])
+    }, [programFilter])
 
     return { loadingPRules, refetch, errorPRules: error }
 }
