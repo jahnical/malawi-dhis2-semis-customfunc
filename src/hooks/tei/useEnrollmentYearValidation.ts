@@ -6,13 +6,14 @@ export function useEnrollmentYearValidation() {
     const engine = useDataEngine();
     const [fieldError, setFieldError] = useState<{ year: unknown; message: string }>();
 
-    const validate = async ({ students, enrollmentYear, dataStore, calendars = [], sectionType, programConfig }: {
+    const validate = async ({ students, enrollmentYear, dataStore, calendars = [], sectionType, programConfig, academicYearField }: {
         students: { trackedEntity?: string; values?: Record<string, any>; enrollmentYear?: unknown }[];
         enrollmentYear?: unknown;
         dataStore: any;
         calendars?: any[];
         sectionType: string;
         programConfig?: any;
+        academicYearField?: string;
     }) => {
         setFieldError(undefined);
         if (sectionType?.toLowerCase() !== 'student') return;
@@ -32,7 +33,7 @@ export function useEnrollmentYearValidation() {
             }
             const selectedYear = student.enrollmentYear ?? enrollmentYear;
             const yearOptions = programConfig?.programStages?.flatMap((stage: any) => stage.programStageDataElements ?? [])
-                .find((item: any) => item.dataElement?.id === dataStore.registration?.academicYear)?.dataElement?.optionSet?.options ?? [];
+                .find((item: any) => item.dataElement?.id === (academicYearField || dataStore.registration?.academicYear))?.dataElement?.optionSet?.options ?? [];
             const message = validateEnrollmentYear({
                 enrollmentYear: selectedYear,
                 admissionDate,
@@ -44,7 +45,7 @@ export function useEnrollmentYearValidation() {
                 console.warn('[Enrollment academic year diagnostic]', JSON.stringify({
                     selectedYear: selectedYear ?? null,
                     valueType: typeof selectedYear,
-                    academicYearField: dataStore.registration?.academicYear ?? null,
+                    academicYearField: academicYearField || dataStore.registration?.academicYear || null,
                     options: yearOptions.map((option: any) => ({ value: option.value ?? option.code, label: option.label ?? option.displayName })),
                     calendars: calendars.map((calendar: any) => calendar.academicYear),
                 }));

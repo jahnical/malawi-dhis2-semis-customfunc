@@ -1,4 +1,5 @@
 import isEqual from "lodash.isequal";
+import { monthsBetween } from '../../../utils/dates/monthsBetween';
 import { useRecoilValue } from "recoil";
 import { useState, useEffect } from "react";
 import { useFormatProgramRules } from "../hooks/useFormatProgramRules";
@@ -131,6 +132,7 @@ export const CustomDhis2RulesEngine = (props: RulesEngineProps) => {
 
         return {
             hasValue: (value: any) => value !== null && value !== undefined && value !== '',
+            monthsBetween,
             yearsBetween: (date1: any, date2: any) => {
                 const d1 = new Date(date1);
                 const d2 = new Date(date2);
