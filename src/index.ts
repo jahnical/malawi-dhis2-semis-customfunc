@@ -119,3 +119,12 @@ export { useEnrollmentYearValidation } from './hooks/tei/useEnrollmentYearValida
 
 export type { SectionLabels } from "./utils/common/getSectionLabels"
 export type { TableSort, SortOrder } from "./utils/table/sort/sortTableRows"
+export { yearOrder } from './utils/validateEnrollmentYear';
+export {
+    academicYearOrder, getAcademicYearOptions, getAcademicYearDates, enrollmentDates, statusForNewEnrollment, statusForFinalResult,
+    academicYearOf, planEnrollmentTransition, closeEnrollmentPayload, keepEnrollmentFields, enrollmentsForTransition, buildTransferApprovalEvents,
+} from './utils/enrollment/enrollmentLifecycle';
+export type {
+    EnrollmentStatus, ExistingEnrollment, ExistingEvent, CalendarEntry, YearContext, TransitionPlan, TransitionConflict,
+} from './utils/enrollment/enrollmentLifecycle';
+export { useGetLearnerEnrollments, LEARNER_ENROLLMENT_FIELDS, TRANSITION_CONFLICT_MESSAGES } from './hooks/enrollment/useGetLearnerEnrollments';

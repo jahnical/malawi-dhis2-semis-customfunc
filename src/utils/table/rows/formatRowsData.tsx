@@ -70,7 +70,9 @@ export function formatRowsData({ registrationInstances, teiInstances, isBasicSta
                     registrationEventOccurredAt: event?.occurredAt,
                     enrollmentId: event?.enrollment,
                     trackedEntity: event.trackedEntity,
-                    orgUnitId: currentEnrollment?.orgUnit,
+                    // The school where the learner is registered now (a transfer moves the registration
+                    // event, not the enrollment), so new events are created there.
+                    orgUnitId: typeof event?.orgUnit === 'object' ? (event.orgUnit as any)?.id : event?.orgUnit,
                     programId: currentEnrollment?.program,
                     status: currentEnrollment?.status,
                     hasActiveEnrollment: hasActiveEnrollment ? 'Yes' : 'No',
@@ -222,38 +224,10 @@ export function formatAdmissionRowsData({ teiInstances, registrationInstances, a
                 })
             );
         }
-        const currentEnrollment = activeEnrollment ?? tei.enrollments?.[0];
-
-        // Determine enrollment update strategy for the Enroll action:
-        // Scenario A: TEI has 1 ACTIVE enrollment with NO registration events (admission-only).
-        //   -> We UPDATE the existing enrollment (add events, set status).
-        //   -> enrollableEnrollmentId = that enrollment's ID
-        // Scenario B: TEI has an ACTIVE enrollment WITH registration events (e.g. enrolled for a past year).
-        //   -> We need to COMPLETE it and CREATE a new enrollment.
-        //   -> activeEnrollmentToComplete = that enrollment's ID
-        const enrollments = tei.enrollments ?? [];
-        const singleActiveEnrollment = enrollments.length === 1 && enrollments[0]?.status === 'ACTIVE'
-            ? enrollments[0] : null;
-
-        let enrollableEnrollmentId: string | undefined;
-        let activeEnrollmentToComplete: string | undefined;
-        let activeEnrollmentEnrolledAt: string | undefined;
-
-        if (singleActiveEnrollment) {
-            const hasEvents = teiEvents.some((event: any) => event.enrollment === singleActiveEnrollment.enrollment);
-            if (!hasEvents) {
-                // Scenario A: fresh admission, no events yet
-                enrollableEnrollmentId = singleActiveEnrollment.enrollment;
-            } else {
-                // Scenario B: has events from previous enrollment, needs completing
-                activeEnrollmentToComplete = singleActiveEnrollment.enrollment;
-                activeEnrollmentEnrolledAt = (singleActiveEnrollment as any).enrolledAt;
-            }
-        } else if (activeEnrollment) {
-            // Multiple enrollments but one is ACTIVE — may need completing
-            activeEnrollmentToComplete = activeEnrollment.enrollment;
-            activeEnrollmentEnrolledAt = (activeEnrollment as any).enrolledAt;
-        }
+        // Without an ACTIVE enrollment (final result recorded, dropout), use the latest registered year
+        const currentEnrollment = activeEnrollment
+            ?? tei.enrollments?.find((e: any) => e.enrollment === mostRecentEvent?.enrollment)
+            ?? tei.enrollments?.[0];
 
         allRows.push({
             // TEI attributes
@@ -266,9 +240,6 @@ export function formatAdmissionRowsData({ teiInstances, registrationInstances, a
             registrationEventOccurredAt: mostRecentEvent?.occurredAt,
             registrationEvents: formatRegistrationEvents(teiEvents),
             enrollmentId: currentEnrollment?.enrollment,
-            enrollableEnrollmentId,
-            activeEnrollmentToComplete,
-            activeEnrollmentEnrolledAt,
             admissionId: tei.trackedEntity,
             trackedEntity: tei.trackedEntity,
             orgUnitId: currentEnrollment?.orgUnit,
