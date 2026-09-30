@@ -18,27 +18,31 @@ export function useEnrollmentYearValidation() {
         setFieldError(undefined);
         if (sectionType?.toLowerCase() !== 'student') return;
         try {
-        const attribute = dataStore?.admission?.admissionDate;
-        if (!attribute) throw new Error('The admission date attribute must be configured before enrolling students.');
+        const attribute = dataStore?.admission?.academicYearAttribute;
+        if (!attribute) throw new Error('The admission academic year attribute must be configured before enrolling students.');
+        const admissionOptions = programConfig?.programTrackedEntityAttributes
+            ?.find((item: any) => item.trackedEntityAttribute?.id === attribute)
+            ?.trackedEntityAttribute?.optionSet?.options ?? [];
         for (const student of students) {
-            let admissionDate = student.values?.[attribute];
+            let admissionYear = student.values?.[attribute];
             if (student.trackedEntity) {
-                // Always read the saved admission date for an existing student.
+                // Always read the saved admission academic year for an existing student.
                 const result: any = await engine.query({ student: {
                     resource: 'tracker/trackedEntities',
                     id: student.trackedEntity,
                     params: { fields: 'attributes[attribute,value]', program: dataStore.program },
                 } });
-                admissionDate = result.student?.attributes?.find((a: any) => a.attribute === attribute)?.value;
+                admissionYear = result.student?.attributes?.find((a: any) => a.attribute === attribute)?.value;
             }
             const selectedYear = student.enrollmentYear ?? enrollmentYear;
             const yearOptions = programConfig?.programStages?.flatMap((stage: any) => stage.programStageDataElements ?? [])
                 .find((item: any) => item.dataElement?.id === (academicYearField || dataStore.registration?.academicYear))?.dataElement?.optionSet?.options ?? [];
             const message = validateEnrollmentYear({
                 enrollmentYear: selectedYear,
-                admissionDate,
+                admissionYear,
                 calendars,
                 options: yearOptions,
+                admissionOptions,
             });
             if (message === 'Select a valid enrollment academic year.') {
                 // Diagnose configuration/value mismatches without logging student data.
@@ -53,7 +57,7 @@ export function useEnrollmentYearValidation() {
             if (message) throw new Error(message);
         }
         } catch (error) {
-            setFieldError({ year: enrollmentYear, message: error instanceof Error ? error.message : 'Could not verify the saved admission date. Please try again.' });
+            setFieldError({ year: enrollmentYear, message: error instanceof Error ? error.message : 'Could not verify the saved admission academic year. Please try again.' });
             throw error;
         }
     };
