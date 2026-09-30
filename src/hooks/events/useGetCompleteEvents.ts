@@ -1,7 +1,7 @@
-import { useConfig, useDataEngine } from "@dhis2/app-runtime";
+import { useDataEngine } from "@dhis2/app-runtime";
 import { EventQueryProps } from "../../types/api/WithoutRegistrationTypes";
-import { convertEventQueryProps, } from "../../utils/tracker-migration/eventsParamsMapping";
-import { getSysInfo } from "../system/getSysInfo";
+import { convertEventQueryProps, mergeEventResponses } from "../../utils/tracker-migration/eventsParamsMapping";
+import { useTrackerApiVersion } from "../system/useTrackerApiVersion";
 
 const EVENT_QUERY = (queryProps: EventQueryProps) => ({
     results: {
@@ -14,15 +14,12 @@ const EVENT_QUERY = (queryProps: EventQueryProps) => ({
 })
 
 export function useGetCompleteEvents() {
-    const config = useConfig()
     const engine = useDataEngine()
-    const { platformVersion } = getSysInfo()
-    const minorVersion = Number.parseInt(platformVersion?.split('.')[1]);
+    const apiVersion = useTrackerApiVersion()
 
     async function getCompleteEvents(props: EventQueryProps): Promise<any> {
-        return await engine.query(EVENT_QUERY(
-            { ...convertEventQueryProps({ queryProps: props, apiVersion: minorVersion ?? config.apiVersion }) }
-        ))
+        const queries = convertEventQueryProps({ queryProps: props, apiVersion })
+        return mergeEventResponses(await Promise.all(queries.map((query) => engine.query(EVENT_QUERY(query)))))
     }
 
     return { getCompleteEvents }

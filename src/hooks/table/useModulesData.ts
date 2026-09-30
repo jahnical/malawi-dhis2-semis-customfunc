@@ -78,18 +78,10 @@ export function useModulesData() {
     const { cancelAllOperations, makeCancellablePromise } = RequestBroker({ requestRef })
     const engine = useDataEngine()
 
-    // DHIS2's tracker API no longer honours paging=false and still returns one page, so
-    // "load everything" means requesting pages until one comes back short.
-    const ALL_PAGES_PAGE_SIZE = 500
-    const ALL_PAGES_MAX_PAGES = 200
+    // paging=false is translated per version (skipPaging=true before 41), so one request returns everything.
     async function getAllEventPages(params: Record<string, any>) {
-        const events: any[] = []
-        for (let page = 1; page <= ALL_PAGES_MAX_PAGES; page++) {
-            const response = await getCompleteEvents({ ...params, page, pageSize: ALL_PAGES_PAGE_SIZE } as any)
-            const batch = response?.results?.instances ?? response?.results?.events ?? []
-            events.push(...batch)
-            if (batch.length < ALL_PAGES_PAGE_SIZE) break
-        }
+        const response = await getCompleteEvents({ ...params, paging: false } as any)
+        const events = response?.results?.instances ?? response?.results?.events ?? []
         return { results: { instances: events, pager: { page: 1, pageSize: events.length, pageCount: 1, total: events.length } } }
     }
 
@@ -171,8 +163,8 @@ export function useModulesData() {
         }
 
         // Resolve the tracked entities for THIS PAGE's registration events. Batch
-        // the lookup (tracker/trackedEntities accepts a ';'-separated id list) so a
-        // page of N students costs one request instead of one request per student.
+        // the lookup (tracker/trackedEntities accepts a list of ids) so a page of N
+        // students costs one request instead of one request per student.
         const pageTeiIds = Array.from(new Set(
             (data as any[]).map((x: { trackedEntity: string }) => x.trackedEntity).filter(Boolean)
         )) as string[];
@@ -189,7 +181,7 @@ export function useModulesData() {
                         orgUnitMode: "ACCESSIBLE",
                         paging: false,
                         program: program as unknown as string,
-                        trackedEntities: batch.join(";"),
+                        trackedEntities: batch,
                     }).catch((error) => {
                         show({
                             message: `${("Could not get tracked entities")}: ${error.message}`,
@@ -275,9 +267,15 @@ export function useModulesData() {
 
     async function getStageData({ tableDataProps, formattedBasicTableData, module }: { tableDataProps: GetTableDataProps, formattedBasicTableData: any, module?: Modules }) {
         const { order, program, orgUnit, baseProgramStage, occurredAfter, occurredBefore, attendanceConfig } = tableDataProps;
-        let copy = []
 
-        for (let i = 0; i < formattedBasicTableData.length; i++) {
+        // Load the stage events for the whole page in batches of enrollments (a list filter on every
+        // tracker version) instead of one request per row.
+        const enrollmentIds = Array.from(new Set(
+            (formattedBasicTableData as any[]).map((row: any) => row.enrollmentId).filter(Boolean)
+        )) as string[];
+        const enrollmentBatchSize = 50;
+        const eventQueries = [];
+        for (let i = 0; i < enrollmentIds.length; i += enrollmentBatchSize) {
             const cancelable = makeCancellablePromise(
                 getCompleteEvents({
                     orgUnitMode: orgUnit != null ? "SELECTED" : "ACCESSIBLE",
@@ -285,7 +283,8 @@ export function useModulesData() {
                     order: order || "occurredAt:desc",
                     programStage: baseProgramStage!,
                     orgUnit: orgUnit,
-                    trackedEntity: formattedBasicTableData[i].trackedEntity,
+                    enrollments: enrollmentIds.slice(i, i + enrollmentBatchSize),
+                    paging: false,
                     ...(occurredAfter ? { occurredAfter: occurredAfter } : {}),
                     ...(occurredBefore ? { occurredBefore: occurredBefore } : {})
                 }).catch((error) => {
@@ -296,19 +295,28 @@ export function useModulesData() {
                     setTimeout(hide, 5000);
                 })
             )
-
-            const eventsResults = await cancelable as unknown as EventQueryResults;
             requestRef.current.push(cancelable);
-            const data = eventsResults?.results?.instances ? eventsResults?.results?.instances : eventsResults?.results?.events ?? []
-            const filteredEvents = data.filter((x: any) => x.enrollment === formattedBasicTableData[i].enrollmentId) as unknown as any || []
+            eventQueries.push(cancelable);
+        }
 
-            copy[i] = {
-                ...(Modules.Attendance == module ?
-                    attendanceDataValuesFormater(filteredEvents, attendanceConfig as unknown as any)
-                    : formatRowsData({ registrationInstances: filteredEvents ?? [], teiInstances: [], isBasicStage: false })[0]),
-                ...formattedBasicTableData[i], ...(Modules.Final_Result == module ? { frEvent: filteredEvents[0] ?? {} } : {})
+        const eventsByEnrollment = new Map<string, any[]>();
+        for (const eventsResults of await Promise.all(eventQueries) as unknown as EventQueryResults[]) {
+            const data = eventsResults?.results?.instances ?? eventsResults?.results?.events ?? []
+            for (const event of data as any[]) {
+                eventsByEnrollment.set(event.enrollment, [...(eventsByEnrollment.get(event.enrollment) ?? []), event])
             }
         }
+
+        const copy = (formattedBasicTableData as any[]).map((row: any) => {
+            const filteredEvents = eventsByEnrollment.get(row.enrollmentId) ?? []
+
+            return {
+                ...(Modules.Attendance == module ?
+                    attendanceDataValuesFormater(filteredEvents, attendanceConfig as unknown as any)
+                    : formatRowsData({ registrationInstances: filteredEvents as any, teiInstances: [], isBasicStage: false })[0]),
+                ...row, ...(Modules.Final_Result == module ? { frEvent: filteredEvents[0] ?? {} } : {})
+            }
+        })
 
         return {
             formattedStagedData: copy
@@ -452,9 +460,9 @@ export function useModulesData() {
             const missingTeisQueries = idBatches.map((batch) =>
                 makeCancellablePromise(
                     getCompleteTeis({
-                        ouMode: "ACCESSIBLE",
+                        orgUnitMode: "ACCESSIBLE",
                         program: program as unknown as string,
-                        trackedEntities: batch.join(";"),
+                        trackedEntities: batch,
                         paging: false,
                     }).catch(() => null)
                 )
@@ -489,12 +497,10 @@ export function useModulesData() {
         );
 
         // Fetch every registration event in this org unit (and its descendants) in
-        // ONE query, rather than per tracked entity. Unlike tracker/trackedEntities,
-        // the tracker/events `trackedEntity` filter only accepts a SINGLE id (a
-        // semicolon-joined list of ids is rejected with E1003, "does not exist" —
-        // DHIS2 tries to look up the whole joined string as one id), so per-TEI
-        // batching isn't an option here; this org-unit-scoped fetch is what covers
-        // the students being displayed.
+        // ONE query, rather than per tracked entity. The tracker/events
+        // `trackedEntity` filter only accepts a SINGLE id, so per-TEI batching isn't
+        // an option here; this org-unit-scoped fetch is what covers the students
+        // being displayed.
         let baseEvents: any[] = [];
         if (orgUnit && baseProgramStage) {
             const registrationEventsQuery = makeCancellablePromise(

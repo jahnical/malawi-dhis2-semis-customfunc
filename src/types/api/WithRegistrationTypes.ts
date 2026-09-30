@@ -5,10 +5,12 @@ interface TeiQueryProps {
     orgUnitMode?: string
     ouMode?: string
     trackedEntities?: string[] | string
-    trackedEntity?: string
+    trackedEntity?: string | string[]
     orgUnit?: string
+    orgUnits?: string | string[]
     order?: string
     paging?: boolean
+    enrollmentStatus?: string
     filter?: string | string[]
     totalPages?: boolean
 }

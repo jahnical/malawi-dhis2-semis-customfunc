@@ -1,9 +1,8 @@
 import useShowAlerts from "../commons/useShowAlert";
-// import { EventQueryProps } from "dhis2-semis-types";
-import { useConfig, useDataEngine } from "@dhis2/app-runtime";
+import { useDataEngine } from "@dhis2/app-runtime";
 import { EventQueryProps } from "../../types/api/WithoutRegistrationTypes";
-import { convertEventQueryProps, } from "../../utils/tracker-migration/eventsParamsMapping";
-import { getSysInfo } from "../system/getSysInfo";
+import { convertEventQueryProps, mergeEventResponses } from "../../utils/tracker-migration/eventsParamsMapping";
+import { useTrackerApiVersion } from "../system/useTrackerApiVersion";
 
 const EVENT_QUERY = (queryProps: EventQueryProps) => ({
     results: {
@@ -15,24 +14,21 @@ const EVENT_QUERY = (queryProps: EventQueryProps) => ({
     }
 })
 
-
-
 export function useGetEvents() {
-    const config = useConfig()
     const engine = useDataEngine()
     const { hide, show } = useShowAlerts()
-    const { platformVersion } = getSysInfo()
-    const minorVersion = Number.parseInt(platformVersion?.split('.')[1]);
+    const apiVersion = useTrackerApiVersion()
 
     async function getEvents(props: EventQueryProps): Promise<any> {
-        return await engine.query(EVENT_QUERY(
-            { ...convertEventQueryProps({ queryProps: props, apiVersion: minorVersion ?? config.apiVersion }) }
-        )).then((resp: any) => {
-            return resp.results?.instances ? resp.results?.instances : resp.results?.events
-        }).catch((error: any) => {
-            show({ message: `Occurred error wihile fetching data: ${error}`, type: { critical: true } })
-            setTimeout(hide, 5000);
-        })
+        const queries = convertEventQueryProps({ queryProps: props, apiVersion })
+        return await Promise.all(queries.map((query) => engine.query(EVENT_QUERY(query))))
+            .then(mergeEventResponses)
+            .then((resp: any) => {
+                return resp.results?.instances ? resp.results?.instances : resp.results?.events
+            }).catch((error: any) => {
+                show({ message: `Occurred error wihile fetching data: ${error}`, type: { critical: true } })
+                setTimeout(hide, 5000);
+            })
     }
 
     return { getEvents }

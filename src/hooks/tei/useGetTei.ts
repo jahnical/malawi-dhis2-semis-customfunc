@@ -1,8 +1,8 @@
 import useShowAlerts from "../commons/useShowAlert";
-import { useConfig, useDataEngine } from "@dhis2/app-runtime";
+import { useDataEngine } from "@dhis2/app-runtime";
 import { type TeiQueryProps } from "../../types/api/WithRegistrationTypes";
 import { convertTrackerQueryProps } from "../../utils/tracker-migration/trackersParamsMapping";
-import { getSysInfo } from "../system/getSysInfo";
+import { useTrackerApiVersion } from "../system/useTrackerApiVersion";
 
 const TEI_QUERY = (queryProps: TeiQueryProps) => ({
     results: {
@@ -15,15 +15,13 @@ const TEI_QUERY = (queryProps: TeiQueryProps) => ({
 })
 
 export function useGetTeis() {
-    const config = useConfig()
     const engine = useDataEngine();
     const { hide, show } = useShowAlerts()
-    const { platformVersion } = getSysInfo()
-    const minorVersion = Number.parseInt(platformVersion?.split('.')[1]);
+    const apiVersion = useTrackerApiVersion()
 
     async function getTeis(props: TeiQueryProps) {
         return await engine.query(TEI_QUERY(
-            { ...convertTrackerQueryProps({ queryProps: props, apiVersion: minorVersion ?? config.apiVersion }) }
+            { ...convertTrackerQueryProps({ queryProps: props, apiVersion }) }
         )).then((resp: any) => {
             return resp.results?.instances ? resp.results?.instances : resp.results?.trackedEntities
         }).catch((error: any) => {

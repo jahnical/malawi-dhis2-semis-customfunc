@@ -43,6 +43,7 @@ import { useUserInfo } from "./hooks/user/useUserInfo"
 import { UserInfoState } from "./schema/userInfoSchema"
 import { useGetSysInfo } from "./hooks/system/info"
 import { getSysInfo } from "./hooks/system/getSysInfo"
+import { useTrackerApiVersion } from "./hooks/system/useTrackerApiVersion"
 import { useIncrementDays } from "./utils/attendance/getDates"
 import { useCacheData } from "./hooks/useCacheData/useCacheData"
 import { useGetPatternCodeParams } from "./hooks/tei/useGetPatternCodeParams"
@@ -104,6 +105,7 @@ export {
     UserInfoState,
     useGetSysInfo,
     getSysInfo,
+    useTrackerApiVersion,
     useIncrementDays,
     useCacheData,
     useGetPatternCodeParams,
