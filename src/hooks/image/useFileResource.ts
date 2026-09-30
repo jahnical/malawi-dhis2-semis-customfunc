@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useDataEngine } from "@dhis2/app-runtime"
 import useShowAlerts from "../commons/useShowAlert"
 import { CreateFileInterface, CreateFileInterfaceResponse } from '../../types/image/useFileResourceType';
-import { getSysInfo } from '../system/getSysInfo';
+import { useTrackerApiVersion } from '../system/useTrackerApiVersion';
 
 const POSTFILERESOURCEMUTATION: any = {
     resource: "fileResources",
@@ -30,6 +30,7 @@ const GETFILERESOURCEQUERYUP40: any = ({ trackedEntity, attribute, program }: { 
         resource: `tracker/trackedEntities/${trackedEntity}/attributes/${attribute}/image`,
         params: {
             program: program,
+            dimension: "MEDIUM"
         }
     }
 })
@@ -39,7 +40,7 @@ export const useFileResource = () => {
     const engine = useDataEngine()
     const { hide, show } = useShowAlerts()
     const [loading, setloading] = useState(false)
-    const { platformVersion } = getSysInfo()
+    const apiVersion = useTrackerApiVersion()
 
     function showAlert(message: string, type: any) {
         setloading(false)
@@ -65,14 +66,13 @@ export const useFileResource = () => {
             setloading(true)
             let file: any = ""
 
+            // /trackedEntityInstances was removed in 42; the tracker image endpoint exists from 41
             try {
-                file = await engine.query(GETFILERESOURCEQUERY({ trackedEntity, attribute }))
+                file = await engine.query(apiVersion < 41
+                    ? GETFILERESOURCEQUERY({ trackedEntity, attribute })
+                    : GETFILERESOURCEQUERYUP40({ trackedEntity, attribute, program }))
             } catch (error) {
-                try {
-                    file = await engine.query(GETFILERESOURCEQUERYUP40({ trackedEntity, attribute, program }))
-                } catch (error) {
-                    setloading(false)
-                }
+                setloading(false)
             }
             setloading(false)
 

@@ -20,6 +20,8 @@ interface EventQueryProps {
     fields?: string
     paging?: boolean
     enrollment?: string
+    enrollments?: string | string[]
+    orgUnits?: string | string[]
     totalPages?: boolean
     enrollmentStatus?: string
 }

@@ -1,61 +1,35 @@
-import { transformQueryParams } from "./tranformParams"
 import { EventQueryProps } from "../../types/api/WithoutRegistrationTypes"
+import { TRACKER_V41, TRACKER_V42, applyPaging, isOrgUnitFreeMode, joinUids, normalizeTrackerParams, withoutUndefined } from "./commonParams"
 
-type MapRule = {
-  to: string
-  transform?: (value: any) => any
-}
-
-export const rules: Record<string, MapRule> = {
-  // DHIS2's tracker API expects a semicolon-separated string for multi-id
-  // filters like `trackedEntity`. The query engine serializes array-valued
-  // params by joining with commas, which the API silently fails to match on
-  // (it treats the whole comma-joined blob as one invalid id). Keep the value
-  // a plain string here so it reaches the wire with semicolons intact.
-  trackedEntities: {
-    to: "trackedEntity",
-    transform: (v: string | string[]) => Array.isArray(v) ? v.join(";") : v,
-  },
-
-  trackedEntity: {
-    to: "trackedEntity",
-    transform: (v: string | string[]) => Array.isArray(v) ? v.join(";") : v,
-  },
-
-  // events: {
-  //     to: "event",
-  //     transform: (v: string) => v.replaceAll(",", ";"),
-  // },
-
-  orgUnitMode: {
-    to: "ouMode",
-  },
-
-  // orgUnits: {
-  //     to: "ou",
-  //     transform: (v: string) => v.replaceAll(",", ";"),
-  // },
-
-  // enrollments: {
-  //     to: "enrollment",
-  //     transform: (v: string) => v.replaceAll(",", ";"),
-  // },
-
-  paging: {
-    to: "skipPaging",
-    transform: (v: boolean) => !v,
-  },
-
-  enrollmentStatus: {
-    to: "programStatus",
-  },
-}
-
-
+// Builds /tracker/events params for the server's version.
+//
+// Unlike /tracker/trackedEntities, /tracker/events only takes a SINGLE `trackedEntity` on every
+// version (40 answers E1003 to a joined list, 41+ silently ignores `trackedEntities` and returns
+// unfiltered events). A query for several tracked entities is therefore split into one query per
+// tracked entity; callers that need many should filter by `enrollments` instead, which is a real
+// list filter on all versions.
 export const convertEventQueryProps = ({ queryProps, apiVersion }
-  : { queryProps: EventQueryProps, apiVersion: number }): EventQueryProps => {
-  if (apiVersion < 41)
-    return { ...transformQueryParams({ rules, params: queryProps }) as EventQueryProps }
+  : { queryProps: EventQueryProps, apiVersion: number }): EventQueryProps[] => {
+  const { rest, orgUnitMode, paging, enrollmentStatus, trackedEntities, orgUnits, enrollments } = normalizeTrackerParams(queryProps)
+  const legacy = apiVersion < TRACKER_V41
 
-  return { ...queryProps }
+  const base = applyPaging(withoutUndefined({
+    ...rest,
+    [legacy ? "ouMode" : "orgUnitMode"]: orgUnitMode,
+    [apiVersion < TRACKER_V42 ? "programStatus" : "enrollmentStatus"]: enrollmentStatus,
+    // /tracker/events takes a single `orgUnit` on every version
+    orgUnit: !legacy && isOrgUnitFreeMode(orgUnitMode) ? undefined : orgUnits[0],
+    enrollments: joinUids(enrollments, ","),
+  }), paging, apiVersion) as EventQueryProps
+
+  if (trackedEntities.length === 0) return [base]
+  return trackedEntities.map((trackedEntity) => ({ ...base, trackedEntity }))
+}
+
+// Merges the responses of split queries back into a single response.
+export const mergeEventResponses = (responses: any[]): any => {
+  if (responses.length === 1) return responses[0]
+
+  const events = responses.flatMap((response) => response?.results?.instances ?? response?.results?.events ?? [])
+  return { results: { events, pager: { page: 1, pageSize: events.length, pageCount: 1, total: events.length } } }
 }
