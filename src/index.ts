@@ -114,6 +114,8 @@ export {
     applyAcademicYearPrefix,
     getAcademicYearUpperYear,
 }
+export { validateEnrollmentYear } from './utils/validateEnrollmentYear';
+export { useEnrollmentYearValidation } from './hooks/tei/useEnrollmentYearValidation';
 
 export type { SectionLabels } from "./utils/common/getSectionLabels"
 export type { TableSort, SortOrder } from "./utils/table/sort/sortTableRows"
