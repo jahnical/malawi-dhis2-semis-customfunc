@@ -105,11 +105,22 @@ export function useTableData({ module }: { module: Modules }) {
     }
 
 
+    // Patches a single row in local state, no network call - for updates already known
+    // client-side (e.g. a value auto-computed from another field just saved), so the table
+    // doesn't need a full reload to reflect them.
+    function updateRow(matcher: (row: Record<string, any>) => boolean, patch: Record<string, any>) {
+        setTableData(prev => ({
+            ...prev,
+            data: prev.data.map(row => matcher(row) ? { ...row, ...patch } : row)
+        }))
+    }
+
     return {
         getBasicData,
         getData,
         tableData,
         loading,
-        sortableKeys
+        sortableKeys,
+        updateRow
     }
 }
