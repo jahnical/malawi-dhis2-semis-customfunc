@@ -16,9 +16,9 @@ export interface SectionLabels {
 // Keep each string a literal inside i18n.t so it is picked up by translation extraction
 const sectionLabels: Record<SectionType, (i18n: Translator) => SectionLabels> = {
     student: (i18n) => ({
-        singular: i18n.t("student"),
-        plural: i18n.t("students"),
-        title: i18n.t("Student"),
+        singular: i18n.t("learner"),
+        plural: i18n.t("learners"),
+        title: i18n.t("Learner"),
     }),
     staff: (i18n) => ({
         singular: i18n.t("staff member"),

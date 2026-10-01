@@ -19,7 +19,7 @@ export function useEnrollmentYearValidation() {
         if (sectionType?.toLowerCase() !== 'student') return;
         try {
         const attribute = dataStore?.admission?.academicYearAttribute;
-        if (!attribute) throw new Error('The admission academic year attribute must be configured before enrolling students.');
+        if (!attribute) throw new Error('The admission academic year attribute must be configured before enrolling learners.');
         const admissionOptions = programConfig?.programTrackedEntityAttributes
             ?.find((item: any) => item.trackedEntityAttribute?.id === attribute)
             ?.trackedEntityAttribute?.optionSet?.options ?? [];
