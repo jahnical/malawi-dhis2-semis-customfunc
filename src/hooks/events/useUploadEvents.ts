@@ -16,6 +16,9 @@ interface UploadOptions {
     errorMessage?: string
     // Attribute/data element names, so messages show "LIN" instead of an id
     names?: Record<string, string>
+    // ALL: the whole payload saves or nothing does. Use it when the objects only make sense together
+    // (closing last year's enrollment and creating the new one). Default OBJECT saves what it can.
+    atomicMode?: "OBJECT" | "ALL"
 }
 
 const useUploadEvents = ():any => {
@@ -32,12 +35,12 @@ const useUploadEvents = ():any => {
     // With atomicMode OBJECT, DHIS2 can save some records and reject others while returning 200,
     // so rejections in a successful response are reported too.
     async function uploadValues(postData: any, importMode: string, importStrategy: string, options: UploadOptions = {}) {
-        const { silent = false, errorMessage = "Could not save", names = {} } = options
+        const { silent = false, errorMessage = "Could not save", names = {}, atomicMode = "OBJECT" } = options
         try {
             const response = await engine.mutate(postEvent, {
                 variables: {
                     data: postData,
-                    params: { ...params, importStrategy, importMode }
+                    params: { ...params, atomicMode, importStrategy, importMode }
                 }
             });
             const rejected = getTrackerErrors(response, names)
