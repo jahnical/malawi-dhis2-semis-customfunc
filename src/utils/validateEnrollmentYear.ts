@@ -57,5 +57,5 @@ export function validateEnrollmentYear({ enrollmentYear, admissionYear, calendar
     if (admission === undefined) return 'A valid saved admission academic year is required before enrollment.';
     const enrollment = yearOrder(enrollmentYear, calendars, options);
     if (enrollment === undefined) return 'Select a valid enrollment academic year.';
-    if (enrollment < admission) return 'Students cannot be enrolled in an academic year before their admission year.';
+    if (enrollment < admission) return 'Learners cannot be enrolled in an academic year before their admission year.';
 }
