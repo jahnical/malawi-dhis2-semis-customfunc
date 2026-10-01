@@ -142,3 +142,43 @@ test('kept fields and academic year options', () => {
     expect(getAcademicYearOptions(programConfig, AY)).toEqual([{ value: '2026', code: '2026', label: '2025/2026', displayName: undefined }])
     expect(getAcademicYearOptions(programConfig, undefined)).toEqual([])
 })
+
+test('academic year formats', () => {
+    expect(academicYearOrder('2025-26')).toBe(2025)
+    expect(academicYearOrder('Academic Year 2025/2026')).toBe(2025)
+    expect(academicYearOrder('2099/00')).toBe(2099)
+    expect(academicYearOrder('2025/2027')).toBeUndefined()
+    // A single year names the later year of the academic year
+    expect(academicYearOrder('2026')).toBe(2025)
+})
+
+test('an unrecognised target year stops instead of guessing', () => {
+    expect(plan([], 'Term A').conflict).toBe('UNKNOWN_ACADEMIC_YEAR')
+    expect(plan([enr('a', 'ACTIVE', [reg('2025/2026')])], 'Term A').conflict).toBe('UNKNOWN_ACADEMIC_YEAR')
+})
+
+test('the same code is the same year even when it cannot be ordered', () => {
+    expect(plan([enr('a', 'COMPLETED', [reg('Term A')])], 'Term A').conflict).toBe('ALREADY_REGISTERED_FOR_YEAR')
+})
+
+test('an active enrollment in an unrecognised year is not closed blindly', () => {
+    expect(plan([enr('a', 'ACTIVE', [reg('Term A')])], '2026/2027').conflict).toBe('UNKNOWN_ACADEMIC_YEAR')
+})
+
+test('enrollment date defaults: year start, else today; empty means default', () => {
+    expect(enrollmentDates({ calendar, academicYear: '2026/2027', enrollmentDate: '' })).toEqual({ enrolledAt: '2026-09-07', occurredAt: '2026-09-07', calendarFound: true })
+    const now = new Date(); const pad = (n: number) => String(n).padStart(2, '0')
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+    expect(enrollmentDates({ calendar, academicYear: '2030/2031' })).toEqual({ enrolledAt: today, occurredAt: today, calendarFound: false })
+    expect(enrollmentDates({ calendar, academicYear: '2030/2031', enrollmentDate: '' })).toEqual({ enrolledAt: today, occurredAt: today, calendarFound: false })
+})
+
+test('calendar dates follow the same year as the rules when codes disagree', () => {
+    // The calendar's "2026" is 2026/2027, but the field's option "2026" is 2025/2026
+    const cal = [
+        { academicYear: { code: '2026', label: '2026/2027', startDate: '2026-09-07' } },
+        { academicYear: { code: '2025/2026', label: '2025/2026', startDate: '2025-09-08' } },
+    ]
+    expect(getAcademicYearDates(cal, '2026', [{ code: '2026', label: '2025/2026' }])?.startDate).toBe('2025-09-08')
+    expect(getAcademicYearDates(cal, '2026')?.startDate).toBe('2026-09-07')
+})

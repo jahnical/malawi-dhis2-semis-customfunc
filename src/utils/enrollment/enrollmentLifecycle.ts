@@ -9,7 +9,8 @@
  *  - CANCELLED  dropout (final result listed in dropoutStatusValues)
  *  - At most one ACTIVE enrollment per learner per program (DHIS2 rule E1015).
  *  - occurredAt (incident date) = start of the academic year from the school calendar.
- *  - enrolledAt = the date the learner was enrolled; defaults to the start of the academic year.
+ *  - enrolledAt = the date the learner was enrolled; defaults to the start of the academic year,
+ *    or today when the school calendar has no start date for it.
  *  - Later operations never overwrite enrolledAt or occurredAt.
  *
  * Academic years are ordered with yearOrder (validateEnrollmentYear.ts): a range such as "2025/2026"
@@ -80,9 +81,15 @@ export function getAcademicYearDates(calendar: CalendarEntry[] | undefined, acad
     const text = String(academicYear).trim()
     const years = { calendars: calendar, options }
     const order = academicYearOrder(text, years)
-    const entry = calendar.find(c => c?.academicYear?.code === text || c?.academicYear?.label === text || c?.academicYear?.id === text)
-        ?? (order === undefined ? undefined : calendar.find(c => academicYearOrder(c?.academicYear?.code, years) === order
-            || academicYearOrder(c?.academicYear?.label, years) === order))
+    // A calendar entry's year comes from its own label first; its code only when the label says nothing
+    const yearOfEntry = (c: CalendarEntry) => academicYearOrder(c?.academicYear?.label, years) ?? academicYearOrder(c?.academicYear?.code, years)
+    const sameYear = (c: CalendarEntry) => yearOfEntry(c) === order
+    const exact = calendar.find(c => c?.academicYear?.code === text || c?.academicYear?.label === text || c?.academicYear?.id === text)
+    // The same code can name different years in the calendar and in the field's option set; when the
+    // year is known, use the calendar entry for that year so dates and rules agree
+    const entry = order === undefined
+        ? exact
+        : (exact && (yearOfEntry(exact) ?? order) === order ? exact : calendar.find(sameYear) ?? exact)
     const startDate = entry?.academicYear?.startDate
     const endDate = entry?.academicYear?.endDate
     return startDate ? { startDate: startDate.slice(0, 10), endDate: endDate?.slice(0, 10) } : undefined
@@ -93,9 +100,19 @@ export function enrollmentDates({ calendar, academicYear, enrollmentDate, option
     calendar: CalendarEntry[] | undefined, academicYear: string, enrollmentDate?: string, options?: YearOption[]
 }) {
     const year = getAcademicYearDates(calendar, academicYear, options)
-    const occurredAt = year?.startDate ?? enrollmentDate?.slice(0, 10)
-    const enrolledAt = enrollmentDate?.slice(0, 10) ?? year?.startDate
+    // An empty field means "use the default": the year's start when the calendar has it, otherwise today
+    const entered = enrollmentDate?.slice(0, 10) || undefined
+    const fallback = year?.startDate ?? today()
+    const occurredAt = year?.startDate ?? entered ?? fallback
+    const enrolledAt = entered ?? fallback
     return { enrolledAt, occurredAt, calendarFound: Boolean(year) }
+}
+
+/** Today's date as YYYY-MM-DD in the user's time zone. */
+function today(): string {
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
 }
 
 /** Status for a new enrollment: past academic years are created COMPLETED, others ACTIVE. */
@@ -124,7 +141,7 @@ export function academicYearOf(enrollment: ExistingEnrollment, registrationStage
     return registration?.dataValues?.find(dv => dv.dataElement === academicYearDataElement)?.value ?? undefined
 }
 
-export type TransitionConflict = 'ALREADY_REGISTERED_FOR_YEAR' | 'LATER_YEAR_ALREADY_ACTIVE'
+export type TransitionConflict = 'ALREADY_REGISTERED_FOR_YEAR' | 'LATER_YEAR_ALREADY_ACTIVE' | 'UNKNOWN_ACADEMIC_YEAR'
 
 export interface TransitionPlan {
     conflict?: TransitionConflict
@@ -150,13 +167,25 @@ export function planEnrollmentTransition({ existing, targetAcademicYear, current
     const live = existing.filter(e => !e.deleted)
     const target = academicYearOrder(targetAcademicYear, years)
     const newStatus = statusForNewEnrollment(targetAcademicYear, currentAcademicYear, years)
-    const yearOf = (e: ExistingEnrollment) => academicYearOrder(academicYearOf(e, registrationStage, academicYearDataElement), years)
+    const codeOf = (e: ExistingEnrollment) => academicYearOf(e, registrationStage, academicYearDataElement)
+    const yearOf = (e: ExistingEnrollment) => academicYearOrder(codeOf(e), years)
+    const sameCode = (code: unknown) => code != null && code !== '' && String(code).trim() === String(targetAcademicYear ?? '').trim()
 
-    if (target !== undefined && live.some(e => yearOf(e) === target)) {
+    // The same code is the same year even when it can't be ordered
+    if (live.some(e => sameCode(codeOf(e)) || (target !== undefined && yearOf(e) === target))) {
         return { conflict: 'ALREADY_REGISTERED_FOR_YEAR', enrollmentsToComplete: [], newStatus }
     }
 
+    // Without knowing which year comes first, the rules below could close the wrong enrollment or
+    // reopen a past year, so stop instead of guessing
+    if (target === undefined) {
+        return { conflict: 'UNKNOWN_ACADEMIC_YEAR', enrollmentsToComplete: [], newStatus }
+    }
+
     const active = live.filter(e => e.status === 'ACTIVE')
+    if (active.some(e => { const code = codeOf(e); return code != null && code !== '' && yearOf(e) === undefined })) {
+        return { conflict: 'UNKNOWN_ACADEMIC_YEAR', enrollmentsToComplete: [], newStatus }
+    }
     const admissionOnly = active.find(e => yearOf(e) === undefined
         && !(e.events ?? []).some(ev => ev.programStage === registrationStage && !ev.deleted))
 
@@ -169,7 +198,7 @@ export function planEnrollmentTransition({ existing, targetAcademicYear, current
     for (const e of active) {
         if (e === admissionOnly) continue
         const year = yearOf(e)
-        if (year !== undefined && target !== undefined && year > target) {
+        if (year !== undefined && year > target) {
             return { conflict: 'LATER_YEAR_ALREADY_ACTIVE', enrollmentsToComplete: [], newStatus }
         }
         enrollmentsToComplete.push(e)
