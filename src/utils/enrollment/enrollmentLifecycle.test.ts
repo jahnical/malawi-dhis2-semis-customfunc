@@ -79,6 +79,19 @@ test('back-capture of a past year leaves the active enrollment alone', () => {
     expect(p.reuseEnrollment).toBeUndefined()
 })
 
+test('back-capture of a past year fills an admission-only enrollment', () => {
+    const p = plan([enr('E0', 'ACTIVE', [])], '2018/2019')
+    expect(p.newStatus).toBe('COMPLETED')
+    expect(p.reuseEnrollment?.enrollment).toBe('E0')
+    expect(p.enrollmentsToComplete).toEqual([])
+})
+
+test('back-capture fills the admission-only enrollment, not the active year', () => {
+    const p = plan([enr('E2', 'ACTIVE', [reg('2025/2026')]), enr('E0', 'ACTIVE', [])], '2023/2024')
+    expect(p.reuseEnrollment?.enrollment).toBe('E0')
+    expect(p.enrollmentsToComplete).toEqual([])
+})
+
 test('a later year already active is a conflict', () => {
     expect(plan([enr('E3', 'ACTIVE', [reg('2026/2027')])], '2025/2026').conflict).toBe('LATER_YEAR_ALREADY_ACTIVE')
 })

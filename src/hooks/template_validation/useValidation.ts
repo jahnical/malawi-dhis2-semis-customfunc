@@ -1,5 +1,6 @@
 import { Modules } from 'dhis2-semis-types';
 import { read, utils, WorkBook } from "xlsx";
+import { restoreLongNumbers } from "../../utils/bulk/restoreLongNumbers";
 
 const METADATA = "Metadata"
 const VALIDATION = "Validation"
@@ -49,6 +50,9 @@ export class useValidation {
                         cellText: false,
                         raw: false
                     });
+
+                    // Long IDs typed as numbers would otherwise be read as "2.0195E+13"
+                    restoreLongNumbers(workbook);
 
                     // const sheetName = workbook.SheetNames[0];
                     // const worksheet = workbook.Sheets[sheetName];

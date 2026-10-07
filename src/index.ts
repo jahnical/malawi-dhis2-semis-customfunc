@@ -51,6 +51,12 @@ import { useGetPatternCodeParams } from "./hooks/tei/useGetPatternCodeParams"
 import { useGetCompleteEvents } from "./hooks/events/useGetCompleteEvents"
 import { useGetCompleteTeis } from "./hooks/tei/useGetCompleteTei"
 import { applyAcademicYearPrefix, getAcademicYearUpperYear } from "./utils/helpers/applyAcademicYearPrefix"
+import { restoreLongNumbers } from "./utils/bulk/restoreLongNumbers"
+import { calendarForAcademicYear, clampToAcademicYear } from "./utils/calendar/calendarForAcademicYear"
+import { eventDateResolver, stageEventDate, stageDatesForYear } from "./utils/calendar/stageEventDate"
+export type { StageCalendar } from "./utils/calendar/stageEventDate"
+import { applicableSubjectDataElements, configuredSubjectDataElements, gradeForScore, termRemarkFor, gradeFormula, termRemarkFormula } from "./utils/performance/performanceMapping"
+export type { PerformanceMappingConfig } from "./utils/performance/performanceMapping"
 
 
 
@@ -99,6 +105,18 @@ export {
     useUploadEach,
     unavailableSchoolDays,
     useValidation,
+    restoreLongNumbers,
+    calendarForAcademicYear,
+    clampToAcademicYear,
+    eventDateResolver,
+    stageEventDate,
+    stageDatesForYear,
+    applicableSubjectDataElements,
+    configuredSubjectDataElements,
+    gradeForScore,
+    termRemarkFor,
+    gradeFormula,
+    termRemarkFormula,
     useValidateFile,
     formatResponseAttributes,
     RequestBroker,

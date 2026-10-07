@@ -190,8 +190,10 @@ export function planEnrollmentTransition({ existing, targetAcademicYear, current
         && !(e.events ?? []).some(ev => ev.programStage === registrationStage && !ev.deleted))
 
     if (newStatus === 'COMPLETED') {
-        // Back-capture of a past year: leave the current ACTIVE enrollment alone.
-        return { enrollmentsToComplete: [], newStatus }
+        // Back-capture of a past year: leave the current ACTIVE enrollment alone. An admission-only
+        // enrollment is still filled (and completed) with that year: otherwise it stays ACTIVE next to
+        // the new one forever, with no year, standard or class, and counts as a current learner
+        return { reuseEnrollment: admissionOnly, enrollmentsToComplete: [], newStatus }
     }
 
     const enrollmentsToComplete: ExistingEnrollment[] = []
