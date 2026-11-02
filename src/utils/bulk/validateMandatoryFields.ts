@@ -15,10 +15,13 @@ const madatoryFieldsValidator = (program: any, fileRowData: any, module: string,
 
 
     students.forEach((student: any) => {
-        const mandatoryAttributeErrors = validateMandatoryAttributtes(student, madatoryFieldsAttributes, profile)
+        // The attendance and performance templates only carry identification columns (read-only) besides
+        // attendance or marks; the learner's profile and registration are not imported, so not validated
+        const attendance = module === "attendance" || module === "performance" || module === "final-result"
+        const mandatoryAttributeErrors = attendance ? [] : validateMandatoryAttributtes(student, madatoryFieldsAttributes, profile)
         // Admission module only uses TEI attributes, not program stage data elements
-        const mandatoryDataElementErrors = module === "admission" ? [] : validateMandatoryDataElements(student, program, profile)
-        const invalidDateFormatErrors = validateDateFields(student, program, profile)
+        const mandatoryDataElementErrors = (module === "admission" || attendance) ? [] : validateMandatoryDataElements(student, program, profile)
+        const invalidDateFormatErrors = attendance ? [] : validateDateFields(student, program, profile)
 
         if (mandatoryAttributeErrors.length === 0 && mandatoryDataElementErrors.length === 0 && invalidDateFormatErrors.length === 0) {
             validData.push({
@@ -205,15 +208,15 @@ const validatePerformanceFields = (student: any, module: string, program: any) =
     );
 
     if (module === "performance") {
-        const emptyTerm1 = Object.keys(student?.['Term 1']).filter(key => student?.['Term 1'][key] === ""
+        const emptyTerm1 = Object.keys(student?.['Term 1'] ?? {}).filter(key => student?.['Term 1'][key] === ""
             || student?.['Term 1'][key] === null || student?.['Term 1'][key] === undefined
         );
 
-        const emptyTerm2 = Object.keys(student?.['Term 2']).filter(key => student?.['Term 2'][key] === ""
+        const emptyTerm2 = Object.keys(student?.['Term 2'] ?? {}).filter(key => student?.['Term 2'][key] === ""
             || student?.['Term 2'][key] === null || student?.['Term 2'][key] === undefined
         );
 
-        const emptyTerm3 = Object.keys(student?.['Term 3']).filter(key => student?.['Term 3'][key] === ""
+        const emptyTerm3 = Object.keys(student?.['Term 3'] ?? {}).filter(key => student?.['Term 3'][key] === ""
             || student?.['Term 3'][key] === null || student?.['Term 3'][key] === undefined
         );
 
